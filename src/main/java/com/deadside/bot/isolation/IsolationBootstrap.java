@@ -2,6 +2,7 @@ package com.deadside.bot.isolation;
 
 import com.deadside.bot.db.repositories.*;
 import com.deadside.bot.utils.GuildIsolationManager;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,7 +117,12 @@ public class IsolationBootstrap {
         try {
             // Use the data cleanup tool to perform the cleaning
             if (dataCleanupTool != null) {
-                totalCleaned = dataCleanupTool.cleanupOrphanedRecords();
+                Map<String, Object> cleanupResults = dataCleanupTool.cleanupOrphanedRecords();
+                int cleanedCount = 0;
+                if (cleanupResults.containsKey("totalCleaned") && cleanupResults.get("totalCleaned") instanceof Number) {
+                    cleanedCount = ((Number) cleanupResults.get("totalCleaned")).intValue();
+                }
+                totalCleaned = cleanedCount;
                 logger.info("Successfully cleaned up {} orphaned records", totalCleaned);
             } else {
                 logger.warn("Data cleanup tool is not initialized, cannot clean orphaned records");

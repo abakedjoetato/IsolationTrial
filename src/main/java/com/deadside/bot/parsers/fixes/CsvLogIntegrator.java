@@ -116,7 +116,7 @@ public class CsvLogIntegrator {
             }
             
             // Track stats before processing
-            int totalPlayersBefore = playerRepository.countPlayersByGuildIdAndServerId(
+            long totalPlayersBefore = playerRepository.countPlayersByGuildIdAndServerId(
                 server.getGuildId(), server.getServerId());
             
             Map<String, Player> playersBefore = new HashMap<>();
@@ -167,7 +167,7 @@ public class CsvLogIntegrator {
             }
             
             // Track stats after processing
-            int totalPlayersAfter = playerRepository.countPlayersByGuildIdAndServerId(
+            long totalPlayersAfter = playerRepository.countPlayersByGuildIdAndServerId(
                 server.getGuildId(), server.getServerId());
             
             Map<String, Player> playersAfter = new HashMap<>();
@@ -192,7 +192,7 @@ public class CsvLogIntegrator {
             // Set summary data
             summary.setCsvLinesProcessed(lineCount.get());
             summary.setCsvErrors(errorCount.get());
-            summary.setPlayersCreated(totalPlayersAfter - totalPlayersBefore);
+            summary.setPlayersCreated((int)(totalPlayersAfter - totalPlayersBefore));
             summary.setTotalKills(totalKills);
             summary.setTotalDeaths(totalDeaths);
             summary.setTotalSuicides(totalSuicides);
@@ -233,8 +233,9 @@ public class CsvLogIntegrator {
                 return;
             }
             
-            // Process server logs with rotation detection
-            int eventsProcessed = LogParserFix.parseServerLogWithRotationDetection(jda, server, sftpConnector);
+            // Process server logs with rotation detection and proper isolation
+            LogParserFix.LogProcessingSummary processSummary = LogParserFix.processServerLog(jda, server, sftpConnector);
+            int eventsProcessed = processSummary.getEventsProcessed();
             summary.setLogEventsProcessed(eventsProcessed);
             
             logger.info("Validated log processing for server {}: {} events processed", 

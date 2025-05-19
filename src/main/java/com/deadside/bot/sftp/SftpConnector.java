@@ -503,4 +503,157 @@ public class SftpConnector {
             }
         }
     }
+    
+    /**
+     * Get the content of a file as a string with proper isolation
+     * @param server The game server with proper isolation metadata
+     * @param remotePath The path to the file on the remote server
+     * @return The file content as a string, or null if the file doesn't exist
+     */
+    private Session createSession(GameServer server) {
+        try {
+            // Verify server has proper isolation fields
+            if (server == null || server.getGuildId() <= 0) {
+                logger.warn("Attempted to create SFTP session without proper guild isolation for server {}", 
+                    server != null ? server.getName() : "null");
+                return null;
+            }
+            
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(server.getSftpUsername(), server.getSftpHost(), server.getSftpPort());
+            session.setPassword(server.getSftpPassword());
+            
+            Properties config = new Properties();
+            config.put("StrictHostKeyChecking", "no");
+            session.setConfig(config);
+            
+            session.connect(timeout);
+            return session;
+        } catch (Exception e) {
+            logger.error("Error creating SFTP session for server {}: {}", 
+                server != null ? server.getName() : "null", e.getMessage());
+            return null;
+        }
+    }
+    
+    public String getFileContent(GameServer server, String remotePath) {
+        Session session = null;
+        ChannelSftp channelSftp = null;
+        try {
+            // Verify server has proper isolation fields
+            if (server.getGuildId() <= 0) {
+                logger.warn("Attempted to access file without proper guild isolation: {} in server {}", 
+                    remotePath, server.getName());
+                return null;
+            }
+            
+            session = createSession(server);
+            if (session == null) {
+                return null;
+            }
+            
+            channelSftp = (ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect(timeout);
+            
+            try (InputStream inputStream = channelSftp.get(remotePath);
+                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                
+                IOUtils.copy(inputStream, outputStream);
+                return outputStream.toString(StandardCharsets.UTF_8.name());
+            }
+        } catch (Exception e) {
+            logger.error("Error getting content of file: {} from server {}", 
+                remotePath, server.getName(), e);
+            return null;
+        } finally {
+            if (channelSftp != null && channelSftp.isConnected()) {
+                channelSftp.disconnect();
+            }
+            if (session != null && session.isConnected()) {
+                session.disconnect();
+            }
+        }
+    }
+    
+    /**
+     * Get the size of a file with proper isolation
+     * @param server The game server with proper isolation metadata
+     * @param remotePath The path to the file on the remote server
+     * @return The file size in bytes, or -1 if the file doesn't exist
+     */
+    public long getFileSize(GameServer server, String remotePath) {
+        Session session = null;
+        ChannelSftp channelSftp = null;
+        try {
+            // Verify server has proper isolation fields
+            if (server.getGuildId() <= 0) {
+                logger.warn("Attempted to access file without proper guild isolation: {} in server {}", 
+                    remotePath, server.getName());
+                return -1;
+            }
+            
+            session = createSession(server);
+            if (session == null) {
+                return -1;
+            }
+            
+            channelSftp = (ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect(timeout);
+            
+            // Get file attributes to get the size
+            return channelSftp.lstat(remotePath).getSize();
+        } catch (Exception e) {
+            logger.error("Error getting size of file: {} from server {}", 
+                remotePath, server.getName(), e);
+            return -1;
+        } finally {
+            if (channelSftp != null && channelSftp.isConnected()) {
+                channelSftp.disconnect();
+            }
+            if (session != null && session.isConnected()) {
+                session.disconnect();
+            }
+        }
+    }
+    
+    /**
+     * Get the last modified timestamp of a file with proper isolation
+     * @param server The game server with proper isolation metadata
+     * @param remotePath The path to the file on the remote server
+     * @return The last modified timestamp in milliseconds, or -1 if the file doesn't exist
+     */
+    public long getLastModified(GameServer server, String remotePath) {
+        Session session = null;
+        ChannelSftp channelSftp = null;
+        try {
+            // Verify server has proper isolation fields
+            if (server.getGuildId() <= 0) {
+                logger.warn("Attempted to access file without proper guild isolation: {} in server {}", 
+                    remotePath, server.getName());
+                return -1;
+            }
+            
+            session = createSession(server);
+            if (session == null) {
+                return -1;
+            }
+            
+            channelSftp = (ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect(timeout);
+            
+            // Get file attributes to get the modified time
+            return channelSftp.lstat(remotePath).getMTime() * 1000L; // Convert from seconds to milliseconds
+        } catch (Exception e) {
+            logger.error("Error getting last modified time of file: {} from server {}", 
+                remotePath, server.getName(), e);
+            return -1;
+        } finally {
+            if (channelSftp != null && channelSftp.isConnected()) {
+                channelSftp.disconnect();
+            }
+            if (session != null && session.isConnected()) {
+                session.disconnect();
+            }
+        }
+    }
 }

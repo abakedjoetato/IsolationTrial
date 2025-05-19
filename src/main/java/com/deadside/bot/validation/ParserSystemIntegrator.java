@@ -1,6 +1,7 @@
 package com.deadside.bot.validation;
 
 import com.deadside.bot.db.models.GameServer;
+import com.deadside.bot.db.models.Player;
 import com.deadside.bot.db.repositories.GameServerRepository;
 import com.deadside.bot.db.repositories.PlayerRepository;
 import com.deadside.bot.parsers.DeadsideCsvParser;

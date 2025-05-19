@@ -80,15 +80,15 @@ public class LogParserFix {
     }
     
     /**
-     * Process server log with rotation detection and proper isolation
+     * Process server log with proper isolation
      * @param jda The JDA instance
      * @param server The game server with proper isolation fields
      * @param connector The SFTP connector to use
      * @return Processing summary
      */
-    public static LogProcessingSummary parseServerLogWithRotationDetection(net.dv8tion.jda.api.JDA jda, 
-                                                                          GameServer server, 
-                                                                          SftpConnector connector) {
+    public static LogProcessingSummary processServerLog(net.dv8tion.jda.api.JDA jda, 
+                                                      GameServer server, 
+                                                      SftpConnector connector) {
         try {
             if (server == null || connector == null) {
                 return new LogProcessingSummary(0, 0, 0, false);

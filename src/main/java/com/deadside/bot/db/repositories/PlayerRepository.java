@@ -4,16 +4,20 @@ import com.deadside.bot.db.MongoDBConnection;
 import com.deadside.bot.db.models.Player;
 import com.deadside.bot.utils.GuildIsolationManager;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.result.DeleteResult;
+import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -199,6 +203,32 @@ public class PlayerRepository {
     }
     
     /**
+     * Find a player by Deadside ID with proper guild and server isolation
+     * @param deadsideId The Deadside game ID of the player
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation
+     * @return The found player or null if not found
+     */
+    public Player findByDeadsideIdAndGuildIdAndServerId(String deadsideId, long guildId, String serverId) {
+        try {
+            if (deadsideId == null || deadsideId.isEmpty() || guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to find player by Deadside ID without proper isolation parameters. Deadside ID: {}, Guild ID: {}, Server ID: {}", 
+                    deadsideId, guildId, serverId);
+                return null;
+            }
+            
+            return getCollection().find(Filters.and(
+                Filters.eq("deadsideId", deadsideId),
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            )).first();
+        } catch (Exception e) {
+            logger.error("Error finding player by Deadside ID with isolation", e);
+            return null;
+        }
+    }
+    
+    /**
      * Find a player by name with guild and server isolation
      */
     public Player findByNameAndGuildIdAndServerId(String name, long guildId, String serverId) {
@@ -211,6 +241,73 @@ public class PlayerRepository {
         } catch (Exception e) {
             logger.error("Error finding player by name with isolation", e);
             return null;
+        }
+    }
+    
+    /**
+     * Find a player by name without isolation
+     * WARNING: This method does not enforce guild isolation
+     * It's used primarily by the KillfeedParser for initial player lookups
+     * You should use findByNameAndGuildIdAndServerId instead whenever possible
+     * @param name The player name to search for
+     * @return The first player found with this name, or null if none
+     */
+    public Player findByName(String name) {
+        try {
+            if (name == null || name.isEmpty()) {
+                logger.warn("Attempted to find player with null or empty name");
+                return null;
+            }
+            
+            logger.warn("Non-isolated player lookup by name: {}. Consider using findByNameAndGuildIdAndServerId instead.", name);
+            return getCollection().find(Filters.eq("name", name)).first();
+        } catch (Exception e) {
+            logger.error("Error finding player by name", e);
+            return null;
+        }
+    }
+    
+    /**
+     * Get the top players by KD ratio with proper isolation by guild and server
+     * @param guildId The Discord guild ID
+     * @param serverId The game server ID
+     * @param limit Maximum number of players to return
+     * @return List of top players with highest KD ratio
+     */
+    public List<Player> getTopPlayersByKDRatio(long guildId, String serverId, int limit) {
+        try {
+            if (guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to get top players without proper isolation. Guild ID: {}, Server ID: {}", 
+                    guildId, serverId);
+                return new ArrayList<>();
+            }
+            
+            // Create a pipeline to calculate KD ratio and sort by it
+            List<Bson> pipeline = Arrays.asList(
+                Aggregates.match(Filters.and(
+                    Filters.eq("guildId", guildId),
+                    Filters.eq("serverId", serverId),
+                    Filters.gt("kills", 0)
+                )),
+                Aggregates.project(Projections.fields(
+                    Projections.include("_id", "name", "kills", "deaths", "deadsideId", "lastSeen", "guildId", "serverId"),
+                    Projections.computed("kdRatio", new Document("$cond", 
+                        new Document("if", new Document("$eq", Arrays.asList("$deaths", 0)))
+                            .append("then", "$kills")
+                            .append("else", new Document("$divide", Arrays.asList("$kills", "$deaths")))
+                    ))
+                )),
+                Aggregates.sort(Sorts.descending("kdRatio")),
+                Aggregates.limit(limit)
+            );
+            
+            List<Player> topPlayers = new ArrayList<>();
+            getCollection().aggregate(pipeline, Player.class).into(topPlayers);
+            
+            return topPlayers;
+        } catch (Exception e) {
+            logger.error("Error getting top players by KD ratio with isolation", e);
+            return new ArrayList<>();
         }
     }
     

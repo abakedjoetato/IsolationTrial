@@ -58,6 +58,7 @@ public class GameServer {
     private boolean eventNotificationsEnabled = true;
     private boolean joinLeaveNotificationsEnabled = true;
     private long uptime = 0;
+    private long lastLogRotation = 0;  // Timestamp of the last detected log rotation
     
     public GameServer() {
         // Required for MongoDB POJO codec
@@ -514,19 +515,8 @@ public class GameServer {
     /**
      * Get the last processed timestamp
      */
-    public long getLastProcessedTimestamp() {
-        return lastProcessedTimestamp;
-    }
-    
     /**
-     * Set the last processed timestamp
-     */
-    public void setLastProcessedTimestamp(long lastProcessedTimestamp) {
-        this.lastProcessedTimestamp = lastProcessedTimestamp;
-    }
-    
-    /**
-     * Get username for authentication
+     * Get the last processed timestamp
      */
     public String getUsername() {
         return username;
@@ -579,6 +569,22 @@ public class GameServer {
      */
     public void setEventNotificationsEnabled(boolean eventNotificationsEnabled) {
         this.eventNotificationsEnabled = eventNotificationsEnabled;
+    }
+    
+    /**
+     * Get the timestamp of the last detected log rotation
+     * @return The last log rotation timestamp in milliseconds
+     */
+    public long getLastLogRotation() {
+        return lastLogRotation;
+    }
+    
+    /**
+     * Set the timestamp of the last detected log rotation
+     * @param lastLogRotation The timestamp in milliseconds
+     */
+    public void setLastLogRotation(long lastLogRotation) {
+        this.lastLogRotation = lastLogRotation;
     }
     
     /**
@@ -696,38 +702,10 @@ public class GameServer {
     }
     
     /**
-     * Set the timestamp of the last processing
+     * Set the last processed timestamp
      */
     public void setLastProcessedTimestamp(long lastProcessedTimestamp) {
         this.lastProcessedTimestamp = lastProcessedTimestamp;
-    }
-    
-    /**
-     * Get the username for authentication
-     */
-    public String getUsername() {
-        return username;
-    }
-    
-    /**
-     * Set the username for authentication
-     */
-    public void setUsername(String username) {
-        this.username = username;
-    }
-    
-    /**
-     * Get the password for authentication
-     */
-    public String getPassword() {
-        return password;
-    }
-    
-    /**
-     * Set the password for authentication
-     */
-    public void setPassword(String password) {
-        this.password = password;
     }
     
     /**
@@ -746,61 +724,5 @@ public class GameServer {
         this.lastProcessedKillfeedFile = filename;
         this.lastProcessedKillfeedLine = (int) lineNumber;
         this.lastProcessedTimestamp = System.currentTimeMillis();
-    }
-    
-    /**
-     * Get the uptime in milliseconds
-     */
-    public long getUptime() {
-        return uptime;
-    }
-    
-    /**
-     * Set the uptime in milliseconds
-     */
-    public void setUptime(long uptime) {
-        this.uptime = uptime;
-    }
-    
-    /**
-     * Check if killfeed is enabled
-     */
-    public boolean isKillfeedEnabled() {
-        return killfeedEnabled;
-    }
-    
-    /**
-     * Set whether killfeed is enabled
-     */
-    public void setKillfeedEnabled(boolean killfeedEnabled) {
-        this.killfeedEnabled = killfeedEnabled;
-    }
-    
-    /**
-     * Check if event notifications are enabled
-     */
-    public boolean isEventNotificationsEnabled() {
-        return eventNotificationsEnabled;
-    }
-    
-    /**
-     * Set whether event notifications are enabled
-     */
-    public void setEventNotificationsEnabled(boolean eventNotificationsEnabled) {
-        this.eventNotificationsEnabled = eventNotificationsEnabled;
-    }
-    
-    /**
-     * Check if join/leave notifications are enabled
-     */
-    public boolean isJoinLeaveNotificationsEnabled() {
-        return joinLeaveNotificationsEnabled;
-    }
-    
-    /**
-     * Set whether join/leave notifications are enabled
-     */
-    public void setJoinLeaveNotificationsEnabled(boolean joinLeaveNotificationsEnabled) {
-        this.joinLeaveNotificationsEnabled = joinLeaveNotificationsEnabled;
     }
 }

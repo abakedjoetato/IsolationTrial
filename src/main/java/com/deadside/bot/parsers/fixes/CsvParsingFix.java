@@ -1,5 +1,6 @@
 package com.deadside.bot.parsers.fixes;
 
+import com.deadside.bot.db.models.GameServer;
 import com.deadside.bot.db.models.Player;
 import com.deadside.bot.db.repositories.PlayerRepository;
 import org.slf4j.Logger;

@@ -1,6 +1,7 @@
 package com.deadside.bot.validation;
 
 import com.deadside.bot.db.models.GameServer;
+import com.deadside.bot.db.models.Player;
 import com.deadside.bot.db.repositories.GameServerRepository;
 import com.deadside.bot.db.repositories.PlayerRepository;
 import com.deadside.bot.parsers.DeadsideCsvParser;
@@ -250,6 +251,7 @@ public class ParserSystemValidator {
         public int totalDeaths;
         public int statCorrections;
         public int serverCount;
+        public int totalPlayersCreated;
         
         // Log parsing validation
         public boolean logParsingValid;
@@ -258,8 +260,20 @@ public class ParserSystemValidator {
         public int rotationDetectionCount;
         public boolean logRotationDetectionValid;
         
+        // Timing information
+        public long startTime;
+        public long endTime;
+        
         // Error information
         public String errorMessage;
+        
+        /**
+         * Get the duration of the validation process in seconds
+         * @return Duration in seconds
+         */
+        public double getDuration() {
+            return (endTime - startTime) / 1000.0;
+        }
         
         /**
          * Get a comprehensive validation summary
