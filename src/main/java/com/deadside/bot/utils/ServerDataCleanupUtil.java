@@ -31,9 +31,9 @@ public class ServerDataCleanupUtil {
             summary.setKillRecordsDeleted(killRecordsDeleted);
             
             // 2. Handle player stats - delete players for this specific server
-            int playerRecordsDeleted = playerRepository.deleteAllByGuildIdAndServerId(
+            long playerRecordsDeleted = playerRepository.deleteAllByGuildIdAndServerId(
                     server.getGuildId(), server.getName());
-            summary.setPlayerRecordsDeleted(playerRecordsDeleted);
+            summary.setPlayerRecordsDeleted((int)playerRecordsDeleted); // Safe cast - unlikely to exceed Integer.MAX_VALUE
             
             // 3. Handle factions - Delete factions associated with this server
             // Currently factions are guild-specific, so we only delete if this is the primary server

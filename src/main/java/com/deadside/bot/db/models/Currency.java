@@ -107,6 +107,13 @@ public class Currency {
         this.lastDailyReward = lastDailyReward;
     }
     
+    /**
+     * Alias for setLastDailyReward for backward compatibility
+     */
+    public void setLastDailyClaim(long lastDailyClaimTimestamp) {
+        this.lastDailyReward = lastDailyClaimTimestamp;
+    }
+    
     public long getLastWork() {
         return lastWork;
     }

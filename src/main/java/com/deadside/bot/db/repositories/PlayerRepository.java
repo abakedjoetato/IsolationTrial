@@ -162,6 +162,43 @@ public class PlayerRepository {
     }
     
     /**
+     * Count all players in the database
+     * WARNING: This method does not respect isolation boundaries and should be used with caution
+     * @return Total number of player records
+     */
+    public long countAll() {
+        try {
+            logger.warn("Non-isolated count of all players. Consider using countPlayersByGuildIdAndServerId instead.");
+            return getCollection().countDocuments();
+        } catch (Exception e) {
+            logger.error("Error counting all players", e);
+            return 0;
+        }
+    }
+    
+    /**
+     * Find a player by Deadside ID (deadsideId) across all guilds and servers
+     * WARNING: This method doesn't enforce guild isolation and should only be used
+     * for cross-guild features like faction tracking. Use with caution.
+     * @param deadsideId The Deadside player ID to search for
+     * @return The first player found with this ID or null if not found
+     */
+    public Player findByDeadsideId(String deadsideId) {
+        try {
+            if (deadsideId == null || deadsideId.isEmpty()) {
+                logger.warn("Attempted to find player with null or empty Deadside ID");
+                return null;
+            }
+            
+            logger.warn("Non-isolated player lookup by Deadside ID: {}. Consider using isolated methods where possible.", deadsideId);
+            return getCollection().find(Filters.eq("deadsideId", deadsideId)).first();
+        } catch (Exception e) {
+            logger.error("Error finding player by Deadside ID: {}", deadsideId, e);
+            return null;
+        }
+    }
+    
+    /**
      * Find a player by name with guild and server isolation
      */
     public Player findByNameAndGuildIdAndServerId(String name, long guildId, String serverId) {
@@ -174,6 +211,29 @@ public class PlayerRepository {
         } catch (Exception e) {
             logger.error("Error finding player by name with isolation", e);
             return null;
+        }
+    }
+    
+    /**
+     * Find players by name using case-insensitive partial matching with proper guild and server isolation
+     * @param name The partial name to search for
+     * @param guildId The guild ID for isolation
+     * @param serverId The server ID for isolation
+     * @return List of players matching the criteria within isolation boundary
+     */
+    public List<Player> findByNameLikeAndGuildIdAndServerId(String name, long guildId, String serverId) {
+        try {
+            // Create a case-insensitive regex pattern for partial name matching
+            Bson filter = Filters.and(
+                Filters.regex("name", name, "i"),  // "i" for case-insensitive
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            );
+            return getCollection().find(filter).into(new ArrayList<>());
+        } catch (Exception e) {
+            logger.error("Error finding players by partial name with isolation: {} (Guild={}, Server={})",
+                name, guildId, serverId, e);
+            return new ArrayList<>();
         }
     }
     
@@ -390,9 +450,10 @@ public class PlayerRepository {
      * @param guildId Guild ID for isolation boundary
      * @param serverId Server ID for isolation boundary
      * @param limit Maximum number of players to return
+     * @param minKills Minimum number of kills required to qualify
      * @return List of players with highest K/D ratio within isolation boundary
      */
-    public List<Player> getTopPlayersByKDRatio(long guildId, String serverId, int limit) {
+    public List<Player> getTopPlayersByKD(long guildId, String serverId, int limit, int minKills) {
         try {
             // Filter out players with no names and those with less than 10 kills
             // This is to avoid new players with 1 kill 0 deaths having infinite KD ratio

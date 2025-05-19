@@ -45,7 +45,8 @@ public class OwnerCheck {
             }
             
             // Convert userId to String for comparison with ownerId
-            return String.valueOf(userId).equals(ownerId);
+            String userIdStr = String.valueOf(userId);
+            return userIdStr.equals(ownerId);
         } catch (Exception e) {
             logger.error("Error checking if user ID {} is bot owner", userId, e);
             return false;

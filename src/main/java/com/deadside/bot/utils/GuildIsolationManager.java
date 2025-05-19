@@ -173,6 +173,53 @@ public class GuildIsolationManager {
     }
     
     /**
+     * Create a new filter context with the specified guild and server IDs
+     * @param guildId The Discord guild ID
+     * @param serverId The game server ID
+     * @return The new filter context, or null if invalid parameters
+     */
+    public FilterContext createFilterContext(long guildId, String serverId) {
+        if (guildId <= 0 || serverId == null || serverId.isEmpty()) {
+            logger.warn("Attempted to create filter context with invalid parameters: Guild={}, Server={}", 
+                guildId, serverId);
+            return null;
+        }
+        
+        FilterContext context = new FilterContext(guildId);
+        context.setServerId(serverId);
+        return context;
+    }
+    
+    /**
+     * Verify if a model object belongs to the specified guild and server
+     * @param model The model object to verify
+     * @param guildId The expected guild ID
+     * @param serverId The expected server ID
+     * @return True if the model belongs to the specified context
+     */
+    public boolean verifyModelIsolation(Object model, long guildId, String serverId) {
+        if (model == null) {
+            return false;
+        }
+        
+        try {
+            // Use reflection to check for getGuildId and getServerId methods
+            java.lang.reflect.Method getGuildIdMethod = model.getClass().getMethod("getGuildId");
+            java.lang.reflect.Method getServerIdMethod = model.getClass().getMethod("getServerId");
+            
+            Long modelGuildId = (Long) getGuildIdMethod.invoke(model);
+            String modelServerId = (String) getServerIdMethod.invoke(model);
+            
+            return modelGuildId != null && modelGuildId == guildId && 
+                   modelServerId != null && modelServerId.equals(serverId);
+        } catch (Exception e) {
+            logger.error("Failed to verify model isolation for {}: {}", 
+                model.getClass().getSimpleName(), e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
      * Filter context class that stores the current guild and server ID
      * for data isolation purposes
      */
@@ -219,6 +266,48 @@ public class GuildIsolationManager {
          */
         public boolean isComplete() {
             return hasValidGuildId() && hasValidServerId();
+        }
+        
+        /**
+         * Verify that an entity's guild and server match this context
+         * @param entityGuildId The guild ID of the entity
+         * @param entityServerId The server ID of the entity
+         * @return True if the entity belongs to this context
+         */
+        public boolean verifyBoundaries(long entityGuildId, String entityServerId) {
+            if (!isComplete()) {
+                return false;
+            }
+            
+            return entityGuildId == guildId && 
+                   entityServerId != null && entityServerId.equals(serverId);
+        }
+        
+        /**
+         * Verify that a model object belongs to this context
+         * @param model The model object to verify
+         * @return True if the model belongs to this context
+         */
+        public boolean verifyModelBoundaries(Object model) {
+            if (model == null || !isComplete()) {
+                return false;
+            }
+            
+            try {
+                // Use reflection to check for getGuildId and getServerId methods
+                java.lang.reflect.Method getGuildIdMethod = model.getClass().getMethod("getGuildId");
+                java.lang.reflect.Method getServerIdMethod = model.getClass().getMethod("getServerId");
+                
+                Long modelGuildId = (Long) getGuildIdMethod.invoke(model);
+                String modelServerId = (String) getServerIdMethod.invoke(model);
+                
+                return verifyBoundaries(modelGuildId, modelServerId);
+            } catch (Exception e) {
+                Logger logger = LoggerFactory.getLogger(FilterContext.class);
+                logger.error("Failed to verify model boundaries for {}: {}", 
+                    model.getClass().getSimpleName(), e.getMessage());
+                return false;
+            }
         }
     }
 }

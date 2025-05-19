@@ -480,7 +480,17 @@ public class AdminEconomyCommand implements ICommand {
      * Check if a user is an admin or the bot owner
      */
     private boolean isAdminOrOwner(long userId) {
-        return userId == config.getBotOwnerId() || config.getAdminUserIds().contains(userId);
+        String ownerIdStr = config.getBotOwnerId();
+        long ownerId = 0;
+        try {
+            // Convert owner ID from String to long for comparison
+            ownerId = Long.parseLong(ownerIdStr);
+        } catch (NumberFormatException e) {
+            logger.error("Invalid bot owner ID format: {}", ownerIdStr);
+            // Fall back to string comparison if needed
+            return String.valueOf(userId).equals(ownerIdStr) || config.getAdminUserIds().contains(userId);
+        }
+        return userId == ownerId || config.getAdminUserIds().contains(userId);
     }
     
     @Override

@@ -117,9 +117,9 @@ public class Config {
         return getProperty(MONGO_DATABASE, "deadsidebot");
     }
 
-    public long getBotOwnerId() {
-        // Hardcoded owner ID as requested
-        return 462961235382763520L;
+    public String getBotOwnerId() {
+        // Hardcoded owner ID as requested, returned as a String for compatibility
+        return "462961235382763520";
         
         // Commented out original code for reference
         /*

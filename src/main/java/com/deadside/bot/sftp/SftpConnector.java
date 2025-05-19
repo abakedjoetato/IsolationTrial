@@ -468,4 +468,39 @@ public class SftpConnector {
             }
         }
     }
+    
+    /**
+     * Check if a file exists on the remote server
+     * @param server The game server configuration with proper isolation metadata
+     * @param remotePath The path to the file on the remote server
+     * @return True if the file exists, false otherwise
+     */
+    public boolean fileExists(GameServer server, String remotePath) {
+        Session session = null;
+        ChannelSftp channelSftp = null;
+        try {
+            session = createSession(server);
+            if (session == null) {
+                return false;
+            }
+            
+            channelSftp = (ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect(timeout);
+            
+            // Try to get the file's attributes - if it doesn't exist, an exception will be thrown
+            channelSftp.lstat(remotePath);
+            return true;
+        } catch (Exception e) {
+            // If exception is thrown, file doesn't exist or is not accessible
+            logger.debug("File does not exist or is not accessible: {}", remotePath);
+            return false;
+        } finally {
+            if (channelSftp != null && channelSftp.isConnected()) {
+                channelSftp.disconnect();
+            }
+            if (session != null && session.isConnected()) {
+                session.disconnect();
+            }
+        }
+    }
 }

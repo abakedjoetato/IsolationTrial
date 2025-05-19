@@ -101,4 +101,32 @@ public class DataBoundary {
         
         return createGuildFilter(guildId);
     }
+    
+    /**
+     * Log a data boundary violation
+     * This is used for security auditing and troubleshooting isolation issues
+     * 
+     * @param operation The operation being performed (e.g., "find", "save", "delete")
+     * @param entityType The type of entity (e.g., "Player", "Bounty")
+     * @param entityId The ID of the entity (if known)
+     * @param contextGuildId The guild ID from the context
+     * @param contextServerId The server ID from the context
+     * @param entityGuildId The guild ID of the entity
+     * @param entityServerId The server ID of the entity
+     */
+    public static void logBoundaryViolation(
+            String operation, 
+            String entityType, 
+            String entityId,
+            long contextGuildId, 
+            String contextServerId,
+            long entityGuildId,
+            String entityServerId) {
+        
+        logger.warn("DATA BOUNDARY VIOLATION: Operation={}, Type={}, ID={}, " +
+                    "Context[Guild={}, Server={}], Entity[Guild={}, Server={}]",
+                operation, entityType, entityId,
+                contextGuildId, contextServerId,
+                entityGuildId, entityServerId);
+    }
 }

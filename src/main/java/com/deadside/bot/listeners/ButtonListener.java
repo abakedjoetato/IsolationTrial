@@ -129,8 +129,8 @@ public class ButtonListener extends ListenerAdapter {
                 break;
                 
             case "kd":
-                List<Player> topKD = playerRepository.getTopPlayersByKDRatio(
-                    filterContext.getGuildId(), filterContext.getServerId(), limit);
+                List<Player> topKD = playerRepository.getTopPlayersByKD(
+                    filterContext.getGuildId(), filterContext.getServerId(), limit, 10);
                 
                 if (topKD.isEmpty()) {
                     embed.setDescription("No player data available yet.");

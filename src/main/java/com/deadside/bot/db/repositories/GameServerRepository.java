@@ -169,6 +169,26 @@ public class GameServerRepository {
     }
     
     /**
+     * Find a game server by guild ID and name (exact match)
+     * This is an alias for findByNameAndGuildId with clearer naming
+     * @param guildId The guild ID for isolation boundary
+     * @param name The name of the server to find
+     * @return The game server if found
+     */
+    public GameServer findByGuildIdAndName(long guildId, String name) {
+        try {
+            Bson filter = Filters.and(
+                Filters.eq("name", name), // Exact name match
+                Filters.eq("guildId", guildId)
+            );
+            return getCollection().find(filter).first();
+        } catch (Exception e) {
+            logger.error("Error finding game server by guild: {} and name: {}", guildId, name, e);
+            return null;
+        }
+    }
+    
+    /**
      * Find a game server by name
      * WARNING: This method doesn't enforce guild isolation
      * and should only be used in contexts where isolation is already enforced

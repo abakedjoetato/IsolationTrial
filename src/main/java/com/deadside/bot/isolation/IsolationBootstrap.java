@@ -105,6 +105,30 @@ public class IsolationBootstrap {
     }
     
     /**
+     * Clean orphaned records across all repositories
+     * This ensures proper data isolation by removing records that may have been left behind
+     * @return Number of records cleaned up
+     */
+    public int cleanOrphanedRecords() {
+        logger.info("Cleaning orphaned records to maintain data isolation");
+        int totalCleaned = 0;
+        
+        try {
+            // Use the data cleanup tool to perform the cleaning
+            if (dataCleanupTool != null) {
+                totalCleaned = dataCleanupTool.cleanupOrphanedRecords();
+                logger.info("Successfully cleaned up {} orphaned records", totalCleaned);
+            } else {
+                logger.warn("Data cleanup tool is not initialized, cannot clean orphaned records");
+            }
+        } catch (Exception e) {
+            logger.error("Error cleaning orphaned records", e);
+        }
+        
+        return totalCleaned;
+    }
+    
+    /**
      * Get the player repository
      */
     public PlayerRepository getPlayerRepository() {
