@@ -37,7 +37,7 @@ public class ParserSystemEntry {
             GameServerRepository gameServerRepository = new GameServerRepository();
             PlayerRepository playerRepository = new PlayerRepository();
             SftpConnector sftpConnector = new SftpConnector();
-            DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, sftpConnector, playerRepository);
+            DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, sftpConnector, playerRepository, gameServerRepository);
             DeadsideLogParser logParser = new DeadsideLogParser(jda, gameServerRepository, sftpConnector);
             
             // Create integrator

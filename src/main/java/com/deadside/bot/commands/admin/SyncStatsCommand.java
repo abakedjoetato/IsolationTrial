@@ -23,12 +23,14 @@ public class SyncStatsCommand implements ICommand {
     private final JDA jda;
     private final SftpConnector sftpConnector;
     private final PlayerRepository playerRepository;
+    private final GameServerRepository gameServerRepository;
     
     public SyncStatsCommand() {
         // Get instances from other parts of the application
         this.jda = null; // This will be populated when the command is executed
         this.sftpConnector = new SftpConnector();
         this.playerRepository = new PlayerRepository();
+        this.gameServerRepository = new GameServerRepository();
     }
     
     @Override
@@ -52,7 +54,8 @@ public class SyncStatsCommand implements ICommand {
             DeadsideCsvParser csvParser = new DeadsideCsvParser(
                     event.getJDA(), 
                     sftpConnector,
-                    playerRepository
+                    playerRepository,
+                    gameServerRepository
             );
             
             // Run synchronization in a separate thread to avoid blocking

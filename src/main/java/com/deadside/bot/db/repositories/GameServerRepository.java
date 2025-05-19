@@ -122,6 +122,46 @@ public class GameServerRepository {
     }
     
     /**
+     * Get all game servers
+     * Warning: This method does not enforce isolation and should be used cautiously
+     * For isolation-aware code, use getServersByGuildId instead
+     * @return List of all game servers
+     */
+    public List<GameServer> getAllServers() {
+        try {
+            logger.warn("Non-isolated server lookup using getAllServers(). Consider using isolation-aware methods instead.");
+            List<GameServer> allServers = new ArrayList<>();
+            getCollection().find().into(allServers);
+            return allServers;
+        } catch (Exception e) {
+            logger.error("Error getting all servers", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get all game servers for a specific guild with proper isolation
+     * @param guildId The Discord guild ID for isolation
+     * @return List of all servers for the given guild
+     */
+    public List<GameServer> getServersByGuildId(long guildId) {
+        try {
+            if (guildId <= 0) {
+                logger.warn("Attempted to get servers without proper guild ID: {}", guildId);
+                return new ArrayList<>();
+            }
+            
+            List<GameServer> servers = new ArrayList<>();
+            getCollection().find(Filters.eq("guildId", guildId)).into(servers);
+            
+            return servers;
+        } catch (Exception e) {
+            logger.error("Error getting servers by guild ID", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Find a game server by MongoDB ObjectID with isolation check
      */
     public GameServer findByObjectIdAndGuildId(ObjectId id, long guildId) {

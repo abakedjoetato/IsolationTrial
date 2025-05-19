@@ -278,6 +278,53 @@ public class CurrencyRepository {
     }
     
     /**
+     * Get all currencies without isolation filtering
+     * Warning: This method does not enforce isolation and should be used cautiously
+     * For isolation-aware code, use methods with guildId and serverId parameters instead
+     * @return List of all currencies
+     */
+    public List<Currency> getAllCurrencies() {
+        try {
+            logger.warn("Non-isolated currency lookup using getAllCurrencies(). Consider using isolation-aware methods instead.");
+            List<Currency> allCurrencies = new ArrayList<>();
+            getCollection().find().into(allCurrencies);
+            return allCurrencies;
+        } catch (Exception e) {
+            logger.error("Error getting all currencies", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get all currencies for a specific guild and server with proper isolation
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation
+     * @return List of all currencies for the given guild and server
+     */
+    public List<Currency> getAllCurrenciesWithIsolation(long guildId, String serverId) {
+        try {
+            if (guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to get all currencies without proper isolation. Guild ID: {}, Server ID: {}", 
+                    guildId, serverId);
+                return new ArrayList<>();
+            }
+            
+            Bson filter = Filters.and(
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            );
+            
+            List<Currency> currencies = new ArrayList<>();
+            getCollection().find(filter).into(currencies);
+            
+            return currencies;
+        } catch (Exception e) {
+            logger.error("Error getting all currencies with isolation", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Delete all currencies by guild and server - used for data cleanup
      */
     public long deleteAllByGuildIdAndServerId(long guildId, String serverId) {

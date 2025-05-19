@@ -39,6 +39,7 @@ public class DeadsideCsvParser {
     private final JDA jda;
     private final SftpConnector sftpConnector;
     private final PlayerRepository playerRepository;
+    private final GameServerRepository gameServerRepository;
     
     // Map to keep track of processed files for each server
     private final Map<String, Set<String>> processedFiles = new HashMap<>();
@@ -283,10 +284,11 @@ public class DeadsideCsvParser {
             "suicide_by_relocation", "suicide", "falling", "bleeding", "drowning", "starvation"
     ));
     
-    public DeadsideCsvParser(JDA jda, SftpConnector sftpConnector, PlayerRepository playerRepository) {
+    public DeadsideCsvParser(JDA jda, SftpConnector sftpConnector, PlayerRepository playerRepository, GameServerRepository gameServerRepository) {
         this.jda = jda;
         this.sftpConnector = sftpConnector;
         this.playerRepository = playerRepository;
+        this.gameServerRepository = gameServerRepository;
         
         // Set timezone for date parsing
         CSV_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -401,8 +403,23 @@ public class DeadsideCsvParser {
             logger.info("Starting player statistics synchronization");
             int updatedCount = 0;
             
-            // Get all players from the repository
-            List<Player> allPlayers = playerRepository.getAllPlayers();
+            // Get all players from the repository with proper isolation
+            List<Player> allPlayers = new ArrayList<>();
+            
+            // First get a list of all game servers to process players by server
+            List<GameServer> allServers = gameServerRepository.getAllServers();
+            logger.info("Found {} game servers to check for players", allServers.size());
+            
+            // For each server, get the players with proper isolation
+            for (GameServer server : allServers) {
+                if (server.getGuildId() > 0 && server.getServerId() != null) {
+                    List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
+                        server.getGuildId(), server.getServerId());
+                    allPlayers.addAll(serverPlayers);
+                    logger.debug("Added {} players from guild {} server {}", 
+                        serverPlayers.size(), server.getGuildId(), server.getServerId());
+                }
+            }
             logger.info("Found {} players to check for statistics synchronization", allPlayers.size());
             
             for (Player player : allPlayers) {
@@ -719,7 +736,23 @@ public class DeadsideCsvParser {
         try {
             logger.info("Starting comprehensive statistics synchronization...");
             
-            List<Player> allPlayers = playerRepository.getAllPlayers();
+            // Get all players from the repository with proper isolation
+            List<Player> allPlayers = new ArrayList<>();
+            
+            // First get a list of all game servers to process players by server
+            List<GameServer> allServers = gameServerRepository.getAllServers();
+            logger.info("Found {} game servers to check for players", allServers.size());
+            
+            // For each server, get the players with proper isolation
+            for (GameServer server : allServers) {
+                if (server.getGuildId() > 0 && server.getServerId() != null) {
+                    List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
+                        server.getGuildId(), server.getServerId());
+                    allPlayers.addAll(serverPlayers);
+                    logger.debug("Added {} players from guild {} server {}", 
+                        serverPlayers.size(), server.getGuildId(), server.getServerId());
+                }
+            }
             int updatedPlayers = 0;
             int totalPlayers = allPlayers.size();
             

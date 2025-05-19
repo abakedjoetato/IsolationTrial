@@ -1,6 +1,7 @@
 package com.deadside.bot.utils;
 
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
@@ -66,6 +67,22 @@ public class GuildIsolationManager {
         } else {
             // DM/private channel - no guild isolation possible
             logger.warn("Attempted to set isolation context from button interaction in non-guild environment");
+            currentContext.remove();
+        }
+    }
+    
+    /**
+     * Set the current context from an auto-complete interaction event
+     */
+    public void setContextFromSlashCommand(CommandAutoCompleteInteractionEvent event) {
+        Guild guild = event.getGuild();
+        if (guild != null) {
+            FilterContext context = new FilterContext(guild.getIdLong());
+            currentContext.set(context);
+            logger.debug("Set isolation context from auto-complete interaction: Guild ID={}", context.getGuildId());
+        } else {
+            // DM/private channel - no guild isolation possible
+            logger.warn("Attempted to set isolation context from auto-complete in non-guild environment");
             currentContext.remove();
         }
     }

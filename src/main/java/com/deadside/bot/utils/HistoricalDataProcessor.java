@@ -59,7 +59,7 @@ public class HistoricalDataProcessor {
                 
                 // Create the parsers
                 KillfeedParser killfeedParser = new KillfeedParser(event.getJDA());
-                DeadsideCsvParser csvParser = new DeadsideCsvParser(event.getJDA(), new SftpConnector(), new PlayerRepository());
+                DeadsideCsvParser csvParser = new DeadsideCsvParser(event.getJDA(), new SftpConnector(), new PlayerRepository(), new GameServerRepository());
                 
                 // Set historical processing flag to true for processing without Discord notifications
                 csvParser.setProcessingHistoricalData(true);
@@ -183,7 +183,7 @@ public class HistoricalDataProcessor {
                 
                 // Create the parsers
                 KillfeedParser killfeedParser = new KillfeedParser(jda);
-                DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, new SftpConnector(), new PlayerRepository());
+                DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, new SftpConnector(), new PlayerRepository(), new GameServerRepository());
                 
                 // Set historical processing flag to true for processing without Discord notifications
                 csvParser.setProcessingHistoricalData(true);

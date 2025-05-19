@@ -29,6 +29,7 @@ public class GameServer {
     private String sftpUsername;   // SFTP username for log retrieval
     private String sftpPassword;   // SFTP password for log retrieval (encrypted)
     private String sftpPath;       // SFTP path to logs directory
+    private long lastLogRotation;  // Timestamp of the last detected log rotation
     
     // Additional properties required by other components
     private String host;           // Alternative reference to ipAddress 
@@ -58,7 +59,6 @@ public class GameServer {
     private boolean eventNotificationsEnabled = true;
     private boolean joinLeaveNotificationsEnabled = true;
     private long uptime = 0;
-    private long lastLogRotation = 0;  // Timestamp of the last detected log rotation
     
     public GameServer() {
         // Required for MongoDB POJO codec
@@ -75,6 +75,7 @@ public class GameServer {
         this.lastProcessedLogLine = 0;
         this.lastProcessedKillfeedLine = 0;
         this.isPrimaryServer = false;
+        this.lastLogRotation = 0;
     }
     
     public GameServer(String serverId, String name, String ipAddress, int port, long guildId) {
@@ -112,6 +113,7 @@ public class GameServer {
         this.lastProcessedTimestamp = 0;
         this.username = "";
         this.password = "";
+        this.lastLogRotation = 0;
     }
     
     /**
@@ -302,6 +304,22 @@ public class GameServer {
     
     public void setSftpPath(String sftpPath) {
         this.sftpPath = sftpPath;
+    }
+    
+    /**
+     * Get the timestamp of the last detected log rotation
+     * @return The timestamp in milliseconds
+     */
+    public long getLastLogRotation() {
+        return lastLogRotation;
+    }
+    
+    /**
+     * Set the timestamp of the last detected log rotation
+     * @param lastLogRotation The timestamp in milliseconds
+     */
+    public void setLastLogRotation(long lastLogRotation) {
+        this.lastLogRotation = lastLogRotation;
     }
     
     /**
@@ -513,10 +531,21 @@ public class GameServer {
     }
     
     /**
-     * Get the last processed timestamp
+     * Get the timestamp of the last processing
      */
+    public long getLastProcessedTimestamp() {
+        return lastProcessedTimestamp;
+    }
+    
     /**
-     * Get the last processed timestamp
+     * Set the last processed timestamp
+     */
+    public void setLastProcessedTimestamp(long lastProcessedTimestamp) {
+        this.lastProcessedTimestamp = lastProcessedTimestamp;
+    }
+    
+    /**
+     * Get username for authentication
      */
     public String getUsername() {
         return username;
@@ -544,171 +573,6 @@ public class GameServer {
     }
     
     /**
-     * Check if killfeed is enabled
-     */
-    public boolean isKillfeedEnabled() {
-        return killfeedEnabled;
-    }
-    
-    /**
-     * Set killfeed enabled status
-     */
-    public void setKillfeedEnabled(boolean killfeedEnabled) {
-        this.killfeedEnabled = killfeedEnabled;
-    }
-    
-    /**
-     * Check if event notifications are enabled
-     */
-    public boolean isEventNotificationsEnabled() {
-        return eventNotificationsEnabled;
-    }
-    
-    /**
-     * Set event notifications enabled status
-     */
-    public void setEventNotificationsEnabled(boolean eventNotificationsEnabled) {
-        this.eventNotificationsEnabled = eventNotificationsEnabled;
-    }
-    
-    /**
-     * Get the timestamp of the last detected log rotation
-     * @return The last log rotation timestamp in milliseconds
-     */
-    public long getLastLogRotation() {
-        return lastLogRotation;
-    }
-    
-    /**
-     * Set the timestamp of the last detected log rotation
-     * @param lastLogRotation The timestamp in milliseconds
-     */
-    public void setLastLogRotation(long lastLogRotation) {
-        this.lastLogRotation = lastLogRotation;
-    }
-    
-    /**
-     * Check if join/leave notifications are enabled
-     */
-    public boolean isJoinLeaveNotificationsEnabled() {
-        return joinLeaveNotificationsEnabled;
-    }
-    
-    /**
-     * Set join/leave notifications enabled status
-     */
-    public void setJoinLeaveNotificationsEnabled(boolean joinLeaveNotificationsEnabled) {
-        this.joinLeaveNotificationsEnabled = joinLeaveNotificationsEnabled;
-    }
-    
-    /**
-     * Update log progress
-     */
-    public void updateLogProgress(String filename, long timestamp) {
-        this.lastProcessedLogFile = filename;
-        this.lastProcessedTimestamp = timestamp;
-        this.lastUpdated = System.currentTimeMillis();
-    }
-    
-    /**
-     * Check if this server has premium features
-     */
-    public boolean isPremium() {
-        return isPremium;
-    }
-    
-    /**
-     * Set whether this server has premium features
-     */
-    public void setPremium(boolean isPremium) {
-        this.isPremium = isPremium;
-    }
-    
-    /**
-     * Get when premium features expire
-     */
-    public long getPremiumUntil() {
-        return premiumUntil;
-    }
-    
-    /**
-     * Set when premium features expire
-     */
-    public void setPremiumUntil(long premiumUntil) {
-        this.premiumUntil = premiumUntil;
-    }
-    
-    /**
-     * Get the last processed log file
-     */
-    public String getLastProcessedLogFile() {
-        return lastProcessedLogFile;
-    }
-    
-    /**
-     * Set the last processed log file
-     */
-    public void setLastProcessedLogFile(String lastProcessedLogFile) {
-        this.lastProcessedLogFile = lastProcessedLogFile;
-    }
-    
-    /**
-     * Get the last processed log line
-     */
-    public int getLastProcessedLogLine() {
-        return lastProcessedLogLine;
-    }
-    
-    /**
-     * Set the last processed log line
-     */
-    public void setLastProcessedLogLine(int lastProcessedLogLine) {
-        this.lastProcessedLogLine = lastProcessedLogLine;
-    }
-    
-    /**
-     * Get the last processed killfeed file
-     */
-    public String getLastProcessedKillfeedFile() {
-        return lastProcessedKillfeedFile;
-    }
-    
-    /**
-     * Set the last processed killfeed file
-     */
-    public void setLastProcessedKillfeedFile(String lastProcessedKillfeedFile) {
-        this.lastProcessedKillfeedFile = lastProcessedKillfeedFile;
-    }
-    
-    /**
-     * Get the last processed killfeed line
-     */
-    public int getLastProcessedKillfeedLine() {
-        return lastProcessedKillfeedLine;
-    }
-    
-    /**
-     * Set the last processed killfeed line
-     */
-    public void setLastProcessedKillfeedLine(int lastProcessedKillfeedLine) {
-        this.lastProcessedKillfeedLine = lastProcessedKillfeedLine;
-    }
-    
-    /**
-     * Get the timestamp of the last processing
-     */
-    public long getLastProcessedTimestamp() {
-        return lastProcessedTimestamp;
-    }
-    
-    /**
-     * Set the last processed timestamp
-     */
-    public void setLastProcessedTimestamp(long lastProcessedTimestamp) {
-        this.lastProcessedTimestamp = lastProcessedTimestamp;
-    }
-    
-    /**
      * Update log progress for tracking processed log files
      */
     public void updateLogProgress(String filename, long lineNumber) {
@@ -724,5 +588,61 @@ public class GameServer {
         this.lastProcessedKillfeedFile = filename;
         this.lastProcessedKillfeedLine = (int) lineNumber;
         this.lastProcessedTimestamp = System.currentTimeMillis();
+    }
+    
+    /**
+     * Get the uptime in milliseconds
+     */
+    public long getUptime() {
+        return uptime;
+    }
+    
+    /**
+     * Set the uptime in milliseconds
+     */
+    public void setUptime(long uptime) {
+        this.uptime = uptime;
+    }
+    
+    /**
+     * Check if killfeed is enabled
+     */
+    public boolean isKillfeedEnabled() {
+        return killfeedEnabled;
+    }
+    
+    /**
+     * Set whether killfeed is enabled
+     */
+    public void setKillfeedEnabled(boolean killfeedEnabled) {
+        this.killfeedEnabled = killfeedEnabled;
+    }
+    
+    /**
+     * Check if event notifications are enabled
+     */
+    public boolean isEventNotificationsEnabled() {
+        return eventNotificationsEnabled;
+    }
+    
+    /**
+     * Set whether event notifications are enabled
+     */
+    public void setEventNotificationsEnabled(boolean eventNotificationsEnabled) {
+        this.eventNotificationsEnabled = eventNotificationsEnabled;
+    }
+    
+    /**
+     * Check if join/leave notifications are enabled
+     */
+    public boolean isJoinLeaveNotificationsEnabled() {
+        return joinLeaveNotificationsEnabled;
+    }
+    
+    /**
+     * Set whether join/leave notifications are enabled
+     */
+    public void setJoinLeaveNotificationsEnabled(boolean joinLeaveNotificationsEnabled) {
+        this.joinLeaveNotificationsEnabled = joinLeaveNotificationsEnabled;
     }
 }

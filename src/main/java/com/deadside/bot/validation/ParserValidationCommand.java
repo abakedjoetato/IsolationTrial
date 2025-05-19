@@ -53,7 +53,7 @@ public class ParserValidationCommand extends ListenerAdapter {
             GameServerRepository gameServerRepository = new GameServerRepository();
             PlayerRepository playerRepository = new PlayerRepository();
             SftpConnector sftpConnector = new SftpConnector();
-            DeadsideCsvParser csvParser = new DeadsideCsvParser(event.getJDA(), sftpConnector, playerRepository);
+            DeadsideCsvParser csvParser = new DeadsideCsvParser(event.getJDA(), sftpConnector, playerRepository, gameServerRepository);
             DeadsideLogParser logParser = new DeadsideLogParser(event.getJDA(), gameServerRepository, sftpConnector);
             
             // Create validator

@@ -86,7 +86,7 @@ public class ProcessHistoricalDataCommand implements ICommand {
                     // Create parsers with actual JDA instance
                     JDA jda = event.getJDA();
                     KillfeedParser killfeedParser = new KillfeedParser(jda);
-                    DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, new SftpConnector(), new PlayerRepository());
+                    DeadsideCsvParser csvParser = new DeadsideCsvParser(jda, new SftpConnector(), new PlayerRepository(), new GameServerRepository());
                     
                     // Process historical killfeed data
                     int kills = killfeedParser.processServer(server, true);

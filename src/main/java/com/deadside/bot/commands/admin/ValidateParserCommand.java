@@ -65,7 +65,7 @@ public class ValidateParserCommand extends ListenerAdapter {
             // Run the parser fix entrypoint
             DeadsideParserFixEntrypoint fixEntrypoint = new DeadsideParserFixEntrypoint(
                 event.getJDA(), gameServerRepository, playerRepository, sftpConnector, 
-                new DeadsideCsvParser(event.getJDA(), sftpConnector, playerRepository),
+                new DeadsideCsvParser(event.getJDA(), sftpConnector, playerRepository, gameServerRepository),
                 new DeadsideLogParser(event.getJDA(), gameServerRepository, sftpConnector));
                 
             String results = fixEntrypoint.executeAllFixesAsBatch();

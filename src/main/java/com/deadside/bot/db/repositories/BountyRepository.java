@@ -194,6 +194,24 @@ public class BountyRepository {
     }
     
     /**
+     * Get all bounties without isolation filtering
+     * Warning: This method does not enforce isolation and should be used cautiously
+     * For isolation-aware code, use findAllByGuildIdAndServerId instead
+     * @return List of all bounties
+     */
+    public List<Bounty> getAllBounties() {
+        try {
+            logger.warn("Non-isolated bounty lookup using getAllBounties(). Consider using isolation-aware methods instead.");
+            List<Bounty> allBounties = new ArrayList<>();
+            getCollection().find().into(allBounties);
+            return allBounties;
+        } catch (Exception e) {
+            logger.error("Error getting all bounties", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Delete all bounties by guild and server - used for data cleanup
      */
     public long deleteAllByGuildIdAndServerId(long guildId, String serverId) {

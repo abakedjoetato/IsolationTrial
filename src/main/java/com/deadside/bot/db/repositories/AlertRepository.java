@@ -132,6 +132,24 @@ public class AlertRepository {
     }
     
     /**
+     * Get all alerts without isolation filtering
+     * Warning: This method does not enforce isolation and should be used cautiously
+     * For isolation-aware code, use getAllAlertsWithIsolation instead
+     * @return List of all alerts
+     */
+    public List<Alert> getAllAlerts() {
+        try {
+            logger.warn("Non-isolated alert lookup using getAllAlerts(). Consider using isolation-aware methods instead.");
+            List<Alert> allAlerts = new ArrayList<>();
+            getCollection().find().into(allAlerts);
+            return allAlerts;
+        } catch (Exception e) {
+            logger.error("Error getting all alerts", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Find all alerts for a guild and server
      */
     public List<Alert> findAllByGuildIdAndServerId(long guildId, String serverId) {

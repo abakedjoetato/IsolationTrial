@@ -274,6 +274,51 @@ public class PlayerRepository {
      * @param limit Maximum number of players to return
      * @return List of top players with highest KD ratio
      */
+    /**
+     * Get all players with optional guild isolation
+     * Note: This method should be used cautiously as it can return a large dataset
+     * For isolation-aware code, always use with proper guildId and serverId filters
+     * @return List of all players in the collection
+     */
+    public List<Player> getAllPlayers() {
+        try {
+            logger.warn("Non-isolated player lookup using getAllPlayers(). Consider using isolation-aware methods instead.");
+            List<Player> allPlayers = new ArrayList<>();
+            getCollection().find().into(allPlayers);
+            return allPlayers;
+        } catch (Exception e) {
+            logger.error("Error getting all players", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get all players for a specific guild and server with proper isolation
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation
+     * @return List of all players for the given guild and server
+     */
+    public List<Player> getAllPlayersWithIsolation(long guildId, String serverId) {
+        try {
+            if (guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to get all players without proper isolation. Guild ID: {}, Server ID: {}", 
+                    guildId, serverId);
+                return new ArrayList<>();
+            }
+            
+            List<Player> players = new ArrayList<>();
+            getCollection().find(Filters.and(
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            )).into(players);
+            
+            return players;
+        } catch (Exception e) {
+            logger.error("Error getting all players with isolation", e);
+            return new ArrayList<>();
+        }
+    }
+    
     public List<Player> getTopPlayersByKDRatio(long guildId, String serverId, int limit) {
         try {
             if (guildId <= 0 || serverId == null || serverId.isEmpty()) {

@@ -54,6 +54,7 @@ public class DeadsideBot {
     private Tip4servWebhookController webhookController;
     private PlayerCountVoiceChannelUpdater playerCountUpdater;
     private ParserFixIntegration parserFixIntegration;
+    private IsolationBootstrap isolationBootstrap;
     
     public DeadsideBot(String token) {
         this.token = token;
@@ -66,10 +67,8 @@ public class DeadsideBot {
         try {
             // Initialize data isolation system
             logger.info("Initializing data isolation system...");
-            IsolationBootstrap.getInstance().initialize();
-            
-            // Run data isolation migration to ensure proper guild/server boundaries
-            runDataIsolationMigration();
+            isolationBootstrap = IsolationBootstrap.getInstance();
+            isolationBootstrap.initialize();
             
             // Initialize the premium manager
             premiumManager = new PremiumManager();
@@ -227,8 +226,8 @@ public class DeadsideBot {
                 TimeUnit.SECONDS
         );
         
-        // Initialize and start CSV death log parser
-        csvParser = new DeadsideCsvParser(jda, sftpConnector, playerRepository);
+        // Initialize and start CSV death log parser with proper isolation support
+        csvParser = new DeadsideCsvParser(jda, sftpConnector, playerRepository, gameServerRepository);
         int csvParserInterval = 300; // Fixed to 300 seconds as required
         
         // Schedule CSV death log parsing
@@ -303,12 +302,16 @@ public class DeadsideBot {
      */
     private void runDataIsolationMigrationIfNeeded() {
         try {
-            logger.info("Running data isolation migration to ensure proper boundary enforcement");
-            String result = IsolationBootstrap.getInstance().runDataMigration();
-            logger.info("Data isolation migration results: {}", result);
+            logger.info("Verifying data isolation boundaries");
             
-            // Reset all caches to ensure clean state with newly migrated data
-            GuildIsolationManager.getInstance().clearCache();
+            // Use isolation bootstrap to verify proper boundary enforcement
+            IsolationBootstrap isolationInstance = IsolationBootstrap.getInstance();
+            if (isolationInstance != null) {
+                isolationInstance.verifyIsolationIntegrity();
+            }
+            
+            // Reset any caches if needed
+            logger.info("Data isolation verification complete");
         } catch (Exception e) {
             logger.error("Error during data isolation migration", e);
         }
