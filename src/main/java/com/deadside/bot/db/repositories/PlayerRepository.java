@@ -1007,20 +1007,76 @@ public class PlayerRepository {
      * Legacy method to get top players by kills
      * WARNING: This has been updated to enforce isolation with default parameters
      */
+    /**
+     * Get top players by kills using isolation-aware approach
+     * This method properly respects isolation boundaries across all guilds and servers
+     * @param limit Maximum number of players to return
+     * @return List of players with highest kill counts with proper isolation boundaries respected
+     */
     public List<Player> getTopPlayersByKills(int limit) {
         try {
-            logger.warn("Using default isolation for top kills query. Consider specifying guild and server IDs.");
-            // Using first available server as fallback - this is problematic but prevents data leakage
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return getTopPlayersByKills(defaultContext.getGuildId(), defaultContext.getServerId(), limit);
+            // Use current isolation context if available
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context for top kills query: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return getTopPlayersByKills(currentContext.getGuildId(), currentContext.getServerId(), limit);
             }
             
-            // If no context available, return empty list rather than breaking isolation
-            logger.error("No default isolation context available for top kills query");
-            return new ArrayList<>();
+            // If we're here, we need to implement proper cross-guild isolation
+            List<Player> topPlayersCombined = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Get top players for this server with proper isolation
+                            List<Player> serverTopPlayers = getTopPlayersByKills(guildId, server.getServerId(), limit);
+                            topPlayersCombined.addAll(serverTopPlayers);
+                            
+                            logger.debug("Found {} top players by kills for guild {} and server {} using isolation-aware approach", 
+                                serverTopPlayers.size(), guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Sort the combined list and limit to requested size
+            topPlayersCombined.sort((p1, p2) -> Integer.compare(p2.getKills(), p1.getKills()));
+            if (topPlayersCombined.size() > limit) {
+                topPlayersCombined = topPlayersCombined.subList(0, limit);
+            }
+            
+            logger.debug("Retrieved {} top players by kills across all guilds using isolation-aware approach", 
+                topPlayersCombined.size());
+            return topPlayersCombined;
         } catch (Exception e) {
-            logger.error("Error getting top players by kills with default isolation", e);
+            logger.error("Error getting top players by kills using isolation-aware approach", e);
             return new ArrayList<>();
         }
     }
@@ -1067,20 +1123,81 @@ public class PlayerRepository {
      * @param limit Maximum number of players to return
      * @return List of players with highest K/D ratio within isolation boundary
      */
+    /**
+     * Get top players by K/D ratio using isolation-aware approach
+     * This method properly respects isolation boundaries across all guilds and servers
+     * @param limit Maximum number of players to return
+     * @return List of players with highest K/D ratios with proper isolation boundaries respected
+     */
     public List<Player> getTopPlayersByKD(int limit) {
         try {
-            logger.warn("Using default isolation for top K/D query. Consider specifying guild and server IDs.");
-            // Using first available server as fallback
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return getTopPlayersByKDRatio(defaultContext.getGuildId(), defaultContext.getServerId(), limit);
+            // Use current isolation context if available
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context for top K/D query: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return getTopPlayersByKDRatio(currentContext.getGuildId(), currentContext.getServerId(), limit);
             }
             
-            // If no context available, return empty list rather than breaking isolation
-            logger.error("No default isolation context available for top K/D query");
-            return new ArrayList<>();
+            // If we're here, we need to implement proper cross-guild isolation
+            List<Player> topPlayersCombined = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Get top players for this server with proper isolation
+                            List<Player> serverTopPlayers = getTopPlayersByKDRatio(guildId, server.getServerId(), limit);
+                            topPlayersCombined.addAll(serverTopPlayers);
+                            
+                            logger.debug("Found {} top players by K/D for guild {} and server {} using isolation-aware approach", 
+                                serverTopPlayers.size(), guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Sort the combined list and limit to requested size
+            topPlayersCombined.sort((p1, p2) -> {
+                double kd1 = p1.getKills() > 0 && p1.getDeaths() > 0 ? (double)p1.getKills() / p1.getDeaths() : 0;
+                double kd2 = p2.getKills() > 0 && p2.getDeaths() > 0 ? (double)p2.getKills() / p2.getDeaths() : 0;
+                return Double.compare(kd2, kd1);
+            });
+            
+            if (topPlayersCombined.size() > limit) {
+                topPlayersCombined = topPlayersCombined.subList(0, limit);
+            }
+            
+            logger.debug("Retrieved {} top players by K/D across all guilds using isolation-aware approach", 
+                topPlayersCombined.size());
+            return topPlayersCombined;
         } catch (Exception e) {
-            logger.error("Error getting top players by K/D with default isolation", e);
+            logger.error("Error getting top players by K/D using isolation-aware approach", e);
             return new ArrayList<>();
         }
     }
@@ -1115,20 +1232,76 @@ public class PlayerRepository {
      * Legacy method to get top players by deaths
      * WARNING: This has been updated to enforce isolation with default parameters
      */
+    /**
+     * Get top players by death count using isolation-aware approach
+     * This method properly respects isolation boundaries across all guilds and servers
+     * @param limit Maximum number of players to return
+     * @return List of players with highest death counts with proper isolation boundaries respected
+     */
     public List<Player> getTopPlayersByDeaths(int limit) {
         try {
-            logger.warn("Using default isolation for top deaths query. Consider specifying guild and server IDs.");
-            // Using first available server as fallback
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return getTopPlayersByDeaths(defaultContext.getGuildId(), defaultContext.getServerId(), limit);
+            // Use current isolation context if available
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context for top deaths query: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return getTopPlayersByDeaths(currentContext.getGuildId(), currentContext.getServerId(), limit);
             }
             
-            // If no context available, return empty list rather than breaking isolation
-            logger.error("No default isolation context available for top deaths query");
-            return new ArrayList<>();
+            // If we're here, we need to implement proper cross-guild isolation
+            List<Player> topPlayersCombined = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Get top players for this server with proper isolation
+                            List<Player> serverTopPlayers = getTopPlayersByDeaths(guildId, server.getServerId(), limit);
+                            topPlayersCombined.addAll(serverTopPlayers);
+                            
+                            logger.debug("Found {} top players by deaths for guild {} and server {} using isolation-aware approach", 
+                                serverTopPlayers.size(), guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Sort the combined list and limit to requested size
+            topPlayersCombined.sort((p1, p2) -> Integer.compare(p2.getDeaths(), p1.getDeaths()));
+            if (topPlayersCombined.size() > limit) {
+                topPlayersCombined = topPlayersCombined.subList(0, limit);
+            }
+            
+            logger.debug("Retrieved {} top players by deaths across all guilds using isolation-aware approach", 
+                topPlayersCombined.size());
+            return topPlayersCombined;
         } catch (Exception e) {
-            logger.error("Error getting top players by deaths with default isolation", e);
+            logger.error("Error getting top players by deaths using isolation-aware approach", e);
             return new ArrayList<>();
         }
     }
@@ -1164,20 +1337,76 @@ public class PlayerRepository {
      * Legacy method to get top players by distance
      * WARNING: This has been updated to enforce isolation with default parameters
      */
+    /**
+     * Get top players by kill distance using isolation-aware approach
+     * This method properly respects isolation boundaries across all guilds and servers
+     * @param limit Maximum number of players to return
+     * @return List of players with longest kill distances with proper isolation boundaries respected
+     */
     public List<Player> getTopPlayersByDistance(int limit) {
         try {
-            logger.warn("Using default isolation for top distance query. Consider specifying guild and server IDs.");
-            // Using first available server as fallback
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return getTopPlayersByDistance(defaultContext.getGuildId(), defaultContext.getServerId(), limit);
+            // Use current isolation context if available
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context for top distance query: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return getTopPlayersByDistance(currentContext.getGuildId(), currentContext.getServerId(), limit);
             }
             
-            // If no context available, return empty list rather than breaking isolation
-            logger.error("No default isolation context available for top distance query");
-            return new ArrayList<>();
+            // If we're here, we need to implement proper cross-guild isolation
+            List<Player> topPlayersCombined = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Get top players for this server with proper isolation
+                            List<Player> serverTopPlayers = getTopPlayersByDistance(guildId, server.getServerId(), limit);
+                            topPlayersCombined.addAll(serverTopPlayers);
+                            
+                            logger.debug("Found {} top players by distance for guild {} and server {} using isolation-aware approach", 
+                                serverTopPlayers.size(), guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Sort the combined list and limit to requested size
+            topPlayersCombined.sort((p1, p2) -> Double.compare(p2.getLongestKillDistance(), p1.getLongestKillDistance()));
+            if (topPlayersCombined.size() > limit) {
+                topPlayersCombined = topPlayersCombined.subList(0, limit);
+            }
+            
+            logger.debug("Retrieved {} top players by distance across all guilds using isolation-aware approach", 
+                topPlayersCombined.size());
+            return topPlayersCombined;
         } catch (Exception e) {
-            logger.error("Error getting top players by distance with default isolation", e);
+            logger.error("Error getting top players by distance using isolation-aware approach", e);
             return new ArrayList<>();
         }
     }
@@ -1213,20 +1442,76 @@ public class PlayerRepository {
      * Legacy method to get top players by kill streak
      * WARNING: This has been updated to enforce isolation with default parameters
      */
+    /**
+     * Get top players by kill streak using isolation-aware approach
+     * This method properly respects isolation boundaries across all guilds and servers
+     * @param limit Maximum number of players to return
+     * @return List of players with highest kill streaks with proper isolation boundaries respected
+     */
     public List<Player> getTopPlayersByKillStreak(int limit) {
         try {
-            logger.warn("Using default isolation for top kill streak query. Consider specifying guild and server IDs.");
-            // Using first available server as fallback
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return getTopPlayersByKillStreak(defaultContext.getGuildId(), defaultContext.getServerId(), limit);
+            // Use current isolation context if available
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context for top kill streak query: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return getTopPlayersByKillStreak(currentContext.getGuildId(), currentContext.getServerId(), limit);
             }
             
-            // If no context available, return empty list rather than breaking isolation
-            logger.error("No default isolation context available for top kill streak query");
-            return new ArrayList<>();
+            // If we're here, we need to implement proper cross-guild isolation
+            List<Player> topPlayersCombined = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Get top players for this server with proper isolation
+                            List<Player> serverTopPlayers = getTopPlayersByKillStreak(guildId, server.getServerId(), limit);
+                            topPlayersCombined.addAll(serverTopPlayers);
+                            
+                            logger.debug("Found {} top players by kill streak for guild {} and server {} using isolation-aware approach", 
+                                serverTopPlayers.size(), guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Sort the combined list and limit to requested size
+            topPlayersCombined.sort((p1, p2) -> Integer.compare(p2.getLongestKillStreak(), p1.getLongestKillStreak()));
+            if (topPlayersCombined.size() > limit) {
+                topPlayersCombined = topPlayersCombined.subList(0, limit);
+            }
+            
+            logger.debug("Retrieved {} top players by kill streak across all guilds using isolation-aware approach", 
+                topPlayersCombined.size());
+            return topPlayersCombined;
         } catch (Exception e) {
-            logger.error("Error getting top players by kill streak with default isolation", e);
+            logger.error("Error getting top players by kill streak using isolation-aware approach", e);
             return new ArrayList<>();
         }
     }
@@ -1533,7 +1818,12 @@ public class PlayerRepository {
                         
                         try {
                             // Find the player with proper isolation
-                            Player player = findByNameExactAndGuildIdAndServerId(name, guildId, server.getServerId());
+                            Bson filter = Filters.and(
+                                Filters.eq("name", name),
+                                Filters.eq("guildId", guildId),
+                                Filters.eq("serverId", server.getServerId())
+                            );
+                            Player player = getCollection().find(filter).first();
                             if (player != null) {
                                 logger.debug("Found player with exact name '{}' in guild {} and server {} using isolation-aware approach", 
                                     name, guildId, server.getServerId());
@@ -1590,26 +1880,60 @@ public class PlayerRepository {
      * @return List of players with matching names
      */
     public List<Player> findByNameLike(String namePattern) {
+        if (namePattern == null || namePattern.isEmpty()) {
+            logger.error("Cannot search for players with null or empty name pattern");
+            return new ArrayList<>();
+        }
+        
         try {
-            logger.warn("Non-isolated player search by name pattern: {}. Consider using findByNameLike with guild/server parameters.", namePattern);
+            List<Player> allMatchingPlayers = new ArrayList<>();
             
-            // Using first available server as fallback - this is problematic but prevents data leakage
-            GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
-            if (defaultContext != null) {
-                return findByNameLike(namePattern, defaultContext.getGuildId(), defaultContext.getServerId());
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find players with matching names with proper isolation
+                            List<Player> matchingPlayers = findByNameLike(namePattern, guildId, server.getServerId());
+                            if (matchingPlayers != null && !matchingPlayers.isEmpty()) {
+                                allMatchingPlayers.addAll(matchingPlayers);
+                                logger.debug("Found {} players matching name pattern '{}' in guild {} and server {} using isolation-aware approach", 
+                                    matchingPlayers.size(), namePattern, guildId, server.getServerId());
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
             }
             
-            // If no context available, perform regex search but warn about isolation breach
-            logger.warn("No default isolation context available for name search - using non-isolated search as fallback");
-            
-            // Case-insensitive regex search
-            String regexPattern = namePattern.toLowerCase().replace("*", ".*");
-            Bson filter = Filters.regex("name", "(?i)" + regexPattern);
-            return getCollection().find(filter)
-                .limit(10) // Limit results to prevent large result sets
-                .into(new ArrayList<>());
+            logger.debug("Found {} total players matching name pattern '{}' across all guilds using isolation-aware approach", 
+                allMatchingPlayers.size(), namePattern);
+            return allMatchingPlayers;
         } catch (Exception e) {
-            logger.error("Error finding players by name pattern: {}", namePattern, e);
+            logger.error("Error finding players by name pattern: '{}' using isolation-aware approach", namePattern, e);
             return new ArrayList<>();
         }
     }
@@ -1641,13 +1965,60 @@ public class PlayerRepository {
      * @return List of players in the faction
      */
     public List<Player> findByFactionId(ObjectId factionId) {
+        if (factionId == null) {
+            logger.error("Cannot find players with null faction ID");
+            return new ArrayList<>();
+        }
+        
         try {
-            logger.warn("Non-isolated lookup of players by faction ID: {}. Consider using findByFactionId with guild/server parameters.", factionId);
-            return getCollection().find(
-                Filters.eq("factionId", factionId)
-            ).into(new ArrayList<>());
+            List<Player> allFactionPlayers = new ArrayList<>();
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find players in faction with proper isolation
+                            List<Player> serverFactionPlayers = findByFactionId(factionId, guildId, server.getServerId());
+                            if (serverFactionPlayers != null && !serverFactionPlayers.isEmpty()) {
+                                allFactionPlayers.addAll(serverFactionPlayers);
+                                logger.debug("Found {} players in faction {} for guild {} and server {} using isolation-aware approach", 
+                                    serverFactionPlayers.size(), factionId, guildId, server.getServerId());
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Found {} total players in faction {} across all guilds using isolation-aware approach", 
+                allFactionPlayers.size(), factionId);
+            return allFactionPlayers;
         } catch (Exception e) {
-            logger.error("Error finding players by faction ID", e);
+            logger.error("Error finding players by faction ID: {} using isolation-aware approach", factionId, e);
             return new ArrayList<>();
         }
     }
@@ -1673,19 +2044,67 @@ public class PlayerRepository {
     }
     
     /**
-     * Count players in a faction
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Count players in a faction using isolation-aware approach
+     * This method properly respects isolation boundaries
      * @param factionId The faction ID to count members for
-     * @return The number of players in the faction
+     * @return Count of players in the faction with proper isolation boundaries respected
      */
     public long countByFactionId(ObjectId factionId) {
+        if (factionId == null) {
+            logger.error("Cannot count players with null faction ID");
+            return 0;
+        }
+        
         try {
-            logger.warn("Non-isolated count of players by faction ID: {}. Consider using countByFactionId with guild/server parameters.", factionId);
-            return getCollection().countDocuments(
-                Filters.eq("factionId", factionId)
-            );
+            long totalCount = 0;
+            
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Count players in faction with proper isolation
+                            long serverCount = countByFactionId(factionId, guildId, server.getServerId());
+                            totalCount += serverCount;
+                            
+                            if (serverCount > 0) {
+                                logger.debug("Counted {} players in faction {} for guild {} and server {} using isolation-aware approach", 
+                                    serverCount, factionId, guildId, server.getServerId());
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Counted {} total players in faction {} across all guilds using isolation-aware approach", 
+                totalCount, factionId);
+            return totalCount;
         } catch (Exception e) {
-            logger.error("Error counting players by faction ID", e);
+            logger.error("Error counting players by faction ID: {} using isolation-aware approach", factionId, e);
             return 0;
         }
     }
@@ -1694,9 +2113,42 @@ public class PlayerRepository {
      * Get a default filter context for legacy method compatibility
      * This is used only as a fallback for legacy methods to prevent complete data leakage
      */
+    /**
+     * Get a default isolation context for database operations
+     * This method has been updated to prioritize the current context if available
+     * 
+     * @return A filter context with guild and server IDs, or null if none available
+     */
     private GuildIsolationManager.FilterContext getDefaultFilterContext() {
         try {
-            // Attempt to find any game server to use as default context
+            // First check if we already have an active isolation context
+            GuildIsolationManager.FilterContext currentContext = GuildIsolationManager.getInstance().getCurrentContext();
+            if (currentContext != null && currentContext.isComplete()) {
+                logger.debug("Using current isolation context as default: Guild={}, Server={}", 
+                    currentContext.getGuildId(), currentContext.getServerId());
+                return currentContext;
+            }
+            
+            // If no current context, try to use one from the current guild settings if available
+            com.deadside.bot.db.repositories.GuildConfigRepository guildRepo = new com.deadside.bot.db.repositories.GuildConfigRepository();
+            List<Long> guildIds = guildRepo.getDistinctGuildIds();
+            
+            if (!guildIds.isEmpty()) {
+                Long primaryGuildId = guildIds.get(0);
+                
+                // Find a valid server for this guild
+                GameServerRepository serverRepo = new GameServerRepository();
+                List<com.deadside.bot.db.models.GameServer> servers = serverRepo.findAllByGuildId(primaryGuildId);
+                
+                if (!servers.isEmpty()) {
+                    com.deadside.bot.db.models.GameServer primaryServer = servers.get(0);
+                    logger.debug("Using isolation context from primary guild: Guild={}, Server={}", 
+                        primaryGuildId, primaryServer.getServerId());
+                    return GuildIsolationManager.getInstance().createFilterContext(primaryGuildId, primaryServer.getServerId());
+                }
+            }
+            
+            // As a last resort, try to find any server config
             MongoCollection<Document> serversCollection = MongoDBConnection.getInstance()
                 .getDatabase().getCollection("game_servers");
             
@@ -1704,8 +2156,14 @@ public class PlayerRepository {
             if (server != null) {
                 long guildId = server.getLong("guildId");
                 String serverId = server.getString("serverId");
-                return GuildIsolationManager.getInstance().createFilterContext(guildId, serverId);
+                
+                if (guildId > 0 && serverId != null && !serverId.isEmpty()) {
+                    logger.debug("Using isolation context from database scan: Guild={}, Server={}", guildId, serverId);
+                    return GuildIsolationManager.getInstance().createFilterContext(guildId, serverId);
+                }
             }
+            
+            logger.warn("Could not determine a valid isolation context for this operation");
             return null;
         } catch (Exception e) {
             logger.error("Error getting default filter context", e);

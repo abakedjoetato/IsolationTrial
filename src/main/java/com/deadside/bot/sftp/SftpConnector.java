@@ -510,6 +510,13 @@ public class SftpConnector {
      * @param remotePath The path to the file on the remote server
      * @return The file content as a string, or null if the file doesn't exist
      */
+    /**
+     * Create an SFTP session with proper guild isolation
+     * This method enforces proper data boundaries between Discord servers
+     * 
+     * @param server The server to connect to
+     * @return The SFTP session, or null if connection failed or server lacks proper isolation
+     */
     private Session createSession(GameServer server) {
         try {
             // Verify server has proper isolation fields
@@ -519,16 +526,51 @@ public class SftpConnector {
                 return null;
             }
             
-            JSch jsch = new JSch();
-            Session session = jsch.getSession(server.getSftpUsername(), server.getSftpHost(), server.getSftpPort());
-            session.setPassword(server.getSftpPassword());
+            // Set isolation context for this operation
+            long guildId = server.getGuildId();
+            String serverId = server.getServerId();
             
-            Properties config = new Properties();
-            config.put("StrictHostKeyChecking", "no");
-            session.setConfig(config);
-            
-            session.connect(timeout);
-            return session;
+            // Set isolation context if possible
+            if (guildId > 0) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, serverId);
+                try {
+                    // Validate SFTP configuration before attempting connection
+                    if (server.getSftpHost() == null || server.getSftpHost().trim().isEmpty()) {
+                        logger.warn("Server {} has proper isolation but missing SFTP host configuration (Guild={})",
+                            server.getName(), guildId);
+                        return null;
+                    }
+                    
+                    // Proceed with SFTP connection using proper isolation
+                    JSch jsch = new JSch();
+                    Session session = jsch.getSession(
+                        server.getSftpUsername() != null ? server.getSftpUsername() : "anonymous",
+                        server.getSftpHost(),
+                        server.getSftpPort() > 0 ? server.getSftpPort() : 22
+                    );
+                    
+                    // Set password if available
+                    if (server.getSftpPassword() != null && !server.getSftpPassword().isEmpty()) {
+                        session.setPassword(server.getSftpPassword());
+                    }
+                    
+                    Properties config = new Properties();
+                    config.put("StrictHostKeyChecking", "no");
+                    session.setConfig(config);
+                    
+                    session.connect(timeout);
+                    
+                    logger.debug("Created SFTP session for server {} with proper isolation (Guild={})",
+                        server.getName(), guildId);
+                    return session;
+                } finally {
+                    // Always clear isolation context when done to prevent leaks
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            } else {
+                logger.error("Cannot create SFTP session for server {} due to missing guild ID", server.getName());
+                return null;
+            }
         } catch (Exception e) {
             logger.error("Error creating SFTP session for server {}: {}", 
                 server != null ? server.getName() : "null", e.getMessage());

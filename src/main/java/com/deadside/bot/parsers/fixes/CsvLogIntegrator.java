@@ -251,28 +251,52 @@ public class CsvLogIntegrator {
     /**
      * Validate leaderboard data consistency
      */
+    /**
+     * Validate leaderboard data consistency using proper isolation
+     * This method ensures that leaderboard validation respects guild and server boundaries
+     */
     private void validateLeaderboardDataConsistency(GameServer server, ValidationSummary summary) {
         try {
-            // Validate kills leaderboard
-            List<Player> topKills = playerRepository.getTopPlayersByKills(
-                server.getGuildId(), server.getServerId(), 10);
-                
-            // Validate deaths leaderboard
-            List<Player> topDeaths = playerRepository.getTopPlayersByDeaths(
-                server.getGuildId(), server.getServerId(), 10);
-                
-            // Validate KD ratio leaderboard
-            List<Player> topKD = playerRepository.getTopPlayersByKDRatio(
-                server.getGuildId(), server.getServerId(), 10);
+            // Skip validation if server lacks proper isolation fields
+            if (server.getGuildId() <= 0 || server.getServerId() == null || server.getServerId().isEmpty()) {
+                logger.warn("Cannot validate leaderboard for server lacking proper isolation: {}", server.getName());
+                summary.setLeaderboardsValid(false);
+                summary.setTopKillsCount(0);
+                summary.setTopDeathsCount(0);
+                summary.setTopKdCount(0);
+                summary.setErrorMessage("Server lacks proper isolation fields");
+                logger.info("Validated leaderboard data for server {}: kills={}, deaths={}, kd={}", 
+                    server.getName(), 0, 0, 0);
+                return;
+            }
             
-            summary.setLeaderboardsValid(true);
-            summary.setTopKillsCount(topKills.size());
-            summary.setTopDeathsCount(topDeaths.size());
-            summary.setTopKdCount(topKD.size());
+            // Set isolation context for this operation
+            com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(server.getGuildId(), server.getServerId());
             
-            logger.info("Validated leaderboard data for server {}: kills={}, deaths={}, kd={}", 
-                server.getName(), topKills.size(), topDeaths.size(), topKD.size());
+            try {
+                // Validate kills leaderboard with proper isolation
+                List<Player> topKills = playerRepository.getTopPlayersByKills(
+                    server.getGuildId(), server.getServerId(), 10);
+                    
+                // Validate deaths leaderboard with proper isolation
+                List<Player> topDeaths = playerRepository.getTopPlayersByDeaths(
+                    server.getGuildId(), server.getServerId(), 10);
+                    
+                // Validate KD ratio leaderboard with proper isolation
+                List<Player> topKD = playerRepository.getTopPlayersByKDRatio(
+                    server.getGuildId(), server.getServerId(), 10);
                 
+                summary.setLeaderboardsValid(true);
+                summary.setTopKillsCount(topKills.size());
+                summary.setTopDeathsCount(topDeaths.size());
+                summary.setTopKdCount(topKD.size());
+                
+                logger.info("Validated leaderboard data for server {}: kills={}, deaths={}, kd={}", 
+                    server.getName(), topKills.size(), topDeaths.size(), topKD.size());
+            } finally {
+                // Always clear isolation context when done
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+            }
         } catch (Exception e) {
             logger.error("Error validating leaderboard data for server {}: {}", 
                 server.getName(), e.getMessage(), e);
