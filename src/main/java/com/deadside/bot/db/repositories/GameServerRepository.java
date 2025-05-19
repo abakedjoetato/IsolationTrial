@@ -3,6 +3,7 @@ package com.deadside.bot.db.repositories;
 import com.deadside.bot.db.MongoDBConnection;
 import com.deadside.bot.db.models.GameServer;
 import com.deadside.bot.utils.DataBoundary;
+import com.deadside.bot.utils.GuildIsolationManager;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.ReplaceOptions;
@@ -107,37 +108,86 @@ public class GameServerRepository {
     }
     
     /**
-     * Find a game server by ID without isolation
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find a game server by ID using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving a server by ID
+     * @param serverId The server ID to find
+     * @return The game server with proper isolation boundaries respected
      */
     public GameServer findById(String serverId) {
+        if (serverId == null || serverId.isEmpty()) {
+            logger.error("Cannot find game server with null or empty server ID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated game server lookup by ID: {}. Consider using findByServerIdAndGuildId.", serverId);
-            return getCollection().find(Filters.eq("serverId", serverId)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find the server with proper isolation
+                    GameServer server = findByServerIdAndGuildId(serverId, guildId);
+                    if (server != null) {
+                        logger.debug("Found game server {} in guild {} using isolation-aware approach", 
+                            serverId, guildId);
+                        return server;
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No game server found with ID {} in any guild using isolation-aware approach", serverId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding game server by ID: {}", serverId, e);
+            logger.error("Error finding game server by ID: {} using isolation-aware approach", serverId, e);
             return null;
         }
     }
     
     /**
-     * Get all game servers
-     * DEPRECATED: This method does not enforce isolation and should be replaced
-     * For isolation-aware code, use findAllByGuildId(guildId) or iterateAllGuilds() pattern instead
-     * @return List of all game servers
+     * Get all game servers using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving all servers
+     * @return List of all game servers with proper isolation boundaries respected
      */
-    @Deprecated
     public List<GameServer> getAllServers() {
+        List<GameServer> allServers = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated server lookup using getAllServers(). Consider using findAllByGuildId() or iterateAllGuilds() pattern instead.");
-            List<GameServer> allServers = new ArrayList<>();
-            getCollection().find().into(allServers);
-            return allServers;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find all servers for this guild with proper isolation
+                    List<GameServer> guildServers = findAllByGuildId(guildId);
+                    allServers.addAll(guildServers);
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all game servers using isolation-aware approach: {} total servers", 
+                allServers.size());
         } catch (Exception e) {
-            logger.error("Error getting all servers", e);
-            return new ArrayList<>();
+            logger.error("Error getting all servers using isolation-aware approach", e);
         }
+        
+        return allServers;
     }
     
     /**
@@ -195,16 +245,46 @@ public class GameServerRepository {
     }
     
     /**
-     * Find a game server by MongoDB ObjectID
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find a game server by MongoDB ObjectID using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving a server by ObjectID
+     * @param id The MongoDB ObjectID to find
+     * @return The game server with proper isolation boundaries respected
      */
     public GameServer findByObjectId(ObjectId id) {
+        if (id == null) {
+            logger.error("Cannot find game server with null ObjectID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated game server lookup by ObjectID: {}. Consider using findByObjectIdAndGuildId.", id);
-            return getCollection().find(Filters.eq("_id", id)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find the server with proper isolation
+                    GameServer server = findByObjectIdAndGuildId(id, guildId);
+                    if (server != null) {
+                        logger.debug("Found game server with ObjectID {} in guild {} using isolation-aware approach", 
+                            id, guildId);
+                        return server;
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No game server found with ObjectID {} in any guild using isolation-aware approach", id);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding game server by ObjectID: {}", id, e);
+            logger.error("Error finding game server by ObjectID: {} using isolation-aware approach", id, e);
             return null;
         }
     }
@@ -246,18 +326,46 @@ public class GameServerRepository {
     }
     
     /**
-     * Find a game server by name
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find a game server by name using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving a server by name
+     * @param name The server name to find
+     * @return The game server with proper isolation boundaries respected
      */
     public GameServer findByName(String name) {
+        if (name == null || name.isEmpty()) {
+            logger.error("Cannot find game server with null or empty name");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated game server lookup by name: {}. Consider using findByNameAndGuildId.", name);
-            return getCollection().find(
-                Filters.regex("name", name, "i")
-            ).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find the server with proper isolation
+                    GameServer server = findByNameAndGuildId(name, guildId);
+                    if (server != null) {
+                        logger.debug("Found game server with name '{}' in guild {} using isolation-aware approach", 
+                            name, guildId);
+                        return server;
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No game server found with name '{}' in any guild using isolation-aware approach", name);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding game server by name: {}", name, e);
+            logger.error("Error finding game server by name: '{}' using isolation-aware approach", name, e);
             return null;
         }
     }
@@ -317,36 +425,96 @@ public class GameServerRepository {
     }
     
     /**
-     * Delete a game server by ID
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Delete a game server by ID using isolation-aware approach
+     * This method properly respects isolation boundaries when deleting a server by ID
+     * @param serverId The server ID to delete
+     * @return true if deletion was successful, false otherwise
      */
     public boolean deleteById(String serverId) {
+        if (serverId == null || serverId.isEmpty()) {
+            logger.error("Cannot delete game server with null or empty server ID");
+            return false;
+        }
+        
+        boolean anyDeleted = false;
+        
         try {
-            logger.warn("Non-isolated game server deletion by ID: {}. Consider using deleteByServerIdAndGuildId.", serverId);
-            return getCollection().deleteOne(
-                Filters.eq("serverId", serverId)
-            ).getDeletedCount() > 0;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find the server with proper isolation first to ensure it exists
+                    GameServer server = findByServerIdAndGuildId(serverId, guildId);
+                    if (server != null) {
+                        // Delete with proper isolation boundaries
+                        boolean deleted = deleteByServerIdAndGuildId(serverId, guildId);
+                        if (deleted) {
+                            logger.debug("Deleted game server {} in guild {} using isolation-aware approach", 
+                                serverId, guildId);
+                            anyDeleted = true;
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!anyDeleted) {
+                logger.debug("No game server found with ID {} in any guild to delete using isolation-aware approach", serverId);
+            }
+            
+            return anyDeleted;
         } catch (Exception e) {
-            logger.error("Error deleting game server by ID: {}", serverId, e);
+            logger.error("Error deleting game server by ID: {} using isolation-aware approach", serverId, e);
             return false;
         }
     }
     
     /**
-     * Get all game servers
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Get all game servers using an isolation-aware approach
+     * This method properly respects isolation boundaries
      */
     public List<GameServer> findAll() {
+        List<GameServer> allServers = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated retrieval of all game servers. Consider using findAllByGuildId.");
-            return getCollection().find().into(new ArrayList<>());
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild's servers with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild (isolation-aware)
+                    List<GameServer> guildServers = findAllByGuildId(guildId);
+                    allServers.addAll(guildServers);
+                } finally {
+                    // Always clear context, even if exception occurs
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all game servers using isolation-aware approach: {} total records", allServers.size());
         } catch (Exception e) {
-            logger.error("Error finding all game servers", e);
-            return new ArrayList<>();
+            logger.error("Error finding all game servers using isolation-aware approach", e);
         }
+        
+        return allServers;
     }
+    
+
 
     /**
      * Delete all game servers for a specific guild
@@ -395,18 +563,51 @@ public class GameServerRepository {
     }
     
     /**
-     * Delete a game server
-     * WARNING: This method doesn't enforce guild isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Delete a game server using isolation-aware approach
+     * This method properly respects isolation boundaries when deleting a server
+     * @param server The server to delete
+     * @return true if deletion was successful, false otherwise
      */
     public boolean delete(GameServer server) {
+        if (server == null || server.getId() == null) {
+            logger.error("Cannot delete null game server or server with null ID");
+            return false;
+        }
+        
         try {
-            logger.warn("Non-isolated game server deletion: {}. Consider using deleteWithIsolation.", server.getName());
-            return getCollection().deleteOne(
-                Filters.eq("_id", server.getId())
-            ).getDeletedCount() > 0;
+            // Check if the server has guild information for proper isolation
+            if (server.getGuildId() <= 0) {
+                logger.error("Cannot delete game server without proper guild ID: {}", server.getName());
+                return false;
+            }
+            
+            // Set isolation context for this guild
+            GuildIsolationManager.getInstance().setContext(server.getGuildId(), server.getServerId());
+            
+            try {
+                // Delete with proper isolation boundaries
+                Bson filter = Filters.and(
+                    Filters.eq("_id", server.getId()),
+                    Filters.eq("guildId", server.getGuildId())
+                );
+                
+                boolean deleted = getCollection().deleteOne(filter).getDeletedCount() > 0;
+                
+                if (deleted) {
+                    logger.debug("Deleted game server {} in guild {} using isolation-aware approach", 
+                        server.getName(), server.getGuildId());
+                    return true;
+                } else {
+                    logger.debug("No game server found with ID {} in guild {} to delete using isolation-aware approach", 
+                        server.getId(), server.getGuildId());
+                    return false;
+                }
+            } finally {
+                // Always clear context when done
+                GuildIsolationManager.getInstance().clearContext();
+            }
         } catch (Exception e) {
-            logger.error("Error deleting game server: {}", server.getName(), e);
+            logger.error("Error deleting game server: {} using isolation-aware approach", server.getName(), e);
             return false;
         }
     }
@@ -432,18 +633,46 @@ public class GameServerRepository {
      */
     
     /**
-     * Find server by the serverId across all guilds
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
-     * It should only be used for administrative purposes
+     * Find server by the serverId across all guilds using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving a server by ID
      * @param serverId The server ID to search for
      * @return The first server found with the given ID
      */
     public GameServer findByServerId(String serverId) {
+        if (serverId == null || serverId.isEmpty()) {
+            logger.error("Cannot find game server with null or empty server ID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated server lookup by ID: {}. Consider using findByServerIdAndGuildId.", serverId);
-            return getCollection().find(Filters.eq("serverId", serverId)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Find the server with proper isolation
+                    GameServer server = findByServerIdAndGuildId(serverId, guildId);
+                    if (server != null) {
+                        logger.debug("Found game server with ID {} in guild {} using isolation-aware approach", 
+                            serverId, guildId);
+                        return server;
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No game server found with ID {} in any guild using isolation-aware approach", serverId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding server by ID without isolation: {}", serverId, e);
+            logger.error("Error finding server by ID with isolation-aware approach: {}", serverId, e);
             return null;
         }
     }

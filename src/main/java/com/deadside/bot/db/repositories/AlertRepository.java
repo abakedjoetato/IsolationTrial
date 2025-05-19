@@ -132,21 +132,57 @@ public class AlertRepository {
     }
     
     /**
-     * Get all alerts without isolation filtering
-     * Warning: This method does not enforce isolation and should be used cautiously
-     * For isolation-aware code, use getAllAlertsWithIsolation instead
-     * @return List of all alerts
+     * Get all alerts using isolation-aware approach
+     * This method properly enforces isolation boundaries while retrieving all alerts
+     * @return List of all alerts with proper isolation boundaries respected
      */
     public List<Alert> getAllAlerts() {
+        List<Alert> allAlerts = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated alert lookup using getAllAlerts(). Consider using isolation-aware methods instead.");
-            List<Alert> allAlerts = new ArrayList<>();
-            getCollection().find().into(allAlerts);
-            return allAlerts;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find all alerts for this guild and server
+                            List<Alert> serverAlerts = findAllByGuildIdAndServerId(guildId, server.getServerId());
+                            allAlerts.addAll(serverAlerts);
+                        } finally {
+                            // Reset to guild-level context
+                            com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all alerts using isolation-aware approach: {} total records", allAlerts.size());
         } catch (Exception e) {
-            logger.error("Error getting all alerts", e);
-            return new ArrayList<>();
+            logger.error("Error getting all alerts using isolation-aware approach", e);
         }
+        
+        return allAlerts;
     }
     
     /**

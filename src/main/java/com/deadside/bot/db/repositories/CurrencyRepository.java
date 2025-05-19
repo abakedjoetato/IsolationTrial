@@ -278,21 +278,40 @@ public class CurrencyRepository {
     }
     
     /**
-     * Get all currencies without isolation filtering
-     * Warning: This method does not enforce isolation and should be used cautiously
-     * For isolation-aware code, use methods with guildId and serverId parameters instead
-     * @return List of all currencies
+     * Get all currencies using isolation-aware approach
+     * This method properly respects isolation boundaries while retrieving all currencies
+     * @return List of all currencies with proper isolation boundaries respected
      */
     public List<Currency> getAllCurrencies() {
+        List<Currency> allCurrencies = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated currency lookup using getAllCurrencies(). Consider using isolation-aware methods instead.");
-            List<Currency> allCurrencies = new ArrayList<>();
-            getCollection().find().into(allCurrencies);
-            return allCurrencies;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get currencies for this guild with proper isolation boundary
+                    List<Currency> guildCurrencies = findAllByGuildId(guildId);
+                    allCurrencies.addAll(guildCurrencies);
+                } finally {
+                    // Always clear context when done
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all currencies using isolation-aware approach: {} total records", allCurrencies.size());
         } catch (Exception e) {
-            logger.error("Error getting all currencies", e);
-            return new ArrayList<>();
+            logger.error("Error getting all currencies using isolation-aware approach", e);
         }
+        
+        return allCurrencies;
     }
     
     /**

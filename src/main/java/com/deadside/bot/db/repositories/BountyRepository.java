@@ -194,21 +194,40 @@ public class BountyRepository {
     }
     
     /**
-     * Get all bounties without isolation filtering
-     * Warning: This method does not enforce isolation and should be used cautiously
-     * For isolation-aware code, use findAllByGuildIdAndServerId instead
-     * @return List of all bounties
+     * Get all bounties using isolation-aware approach
+     * This method properly respects isolation boundaries while retrieving all bounties
+     * @return List of all bounties with proper isolation boundaries respected
      */
     public List<Bounty> getAllBounties() {
+        List<Bounty> allBounties = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated bounty lookup using getAllBounties(). Consider using isolation-aware methods instead.");
-            List<Bounty> allBounties = new ArrayList<>();
-            getCollection().find().into(allBounties);
-            return allBounties;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get bounties for this guild with proper isolation boundary
+                    List<Bounty> guildBounties = findAllByGuildId(guildId);
+                    allBounties.addAll(guildBounties);
+                } finally {
+                    // Always clear context when done
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all bounties using isolation-aware approach: {} total records", allBounties.size());
         } catch (Exception e) {
-            logger.error("Error getting all bounties", e);
-            return new ArrayList<>();
+            logger.error("Error getting all bounties using isolation-aware approach", e);
         }
+        
+        return allBounties;
     }
     
     /**

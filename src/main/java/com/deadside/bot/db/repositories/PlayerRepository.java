@@ -275,21 +275,57 @@ public class PlayerRepository {
      * @return List of top players with highest KD ratio
      */
     /**
-     * Get all players with optional guild isolation
-     * Note: This method should be used cautiously as it can return a large dataset
-     * For isolation-aware code, always use with proper guildId and serverId filters
-     * @return List of all players in the collection
+     * Get all players using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving all players
+     * @return List of all players with proper isolation boundaries respected
      */
     public List<Player> getAllPlayers() {
+        List<Player> allPlayers = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated player lookup using getAllPlayers(). Consider using isolation-aware methods instead.");
-            List<Player> allPlayers = new ArrayList<>();
-            getCollection().find().into(allPlayers);
-            return allPlayers;
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find all players for this guild and server
+                            List<Player> serverPlayers = findAllByGuildIdAndServerId(guildId, server.getServerId());
+                            allPlayers.addAll(serverPlayers);
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all players using isolation-aware approach: {} total records", allPlayers.size());
         } catch (Exception e) {
-            logger.error("Error getting all players", e);
-            return new ArrayList<>();
+            logger.error("Error getting all players using isolation-aware approach", e);
         }
+        
+        return allPlayers;
     }
     
     /**
@@ -484,17 +520,57 @@ public class PlayerRepository {
     }
     
     /**
-     * Get all players
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Get all players using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving all players
+     * @return List of all players with proper isolation boundaries respected
      */
     public List<Player> findAll() {
+        List<Player> allPlayers = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated retrieval of all players. Consider using findByGuildIdAndServerId.");
-            return getCollection().find().into(new ArrayList<>());
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find all players for this guild and server
+                            List<Player> serverPlayers = findAllByGuildIdAndServerId(guildId, server.getServerId());
+                            allPlayers.addAll(serverPlayers);
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all players using isolation-aware approach: {} total records", allPlayers.size());
         } catch (Exception e) {
-            logger.error("Error getting all players", e);
-            return new ArrayList<>();
+            logger.error("Error getting all players using isolation-aware approach", e);
         }
+        
+        return allPlayers;
     }
     
     /**

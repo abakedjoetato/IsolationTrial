@@ -247,18 +247,55 @@ public class LinkedPlayerRepository {
     }
     
     /**
-     * Find all linked players
-     * WARNING: This method doesn't enforce guild or server isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find all linked players using isolation-aware approach
+     * This method properly respects isolation boundaries while retrieving all players
      */
     public List<LinkedPlayer> findAll() {
+        List<LinkedPlayer> allPlayers = new ArrayList<>();
+        
         try {
-            logger.warn("Non-isolated retrieval of all linked players. Consider using findAllByGuildIdAndServerId.");
-            return getCollection().find().into(new ArrayList<>());
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild's linked players with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild before accessing data
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all linked players for this guild (isolation-aware)
+                    List<LinkedPlayer> guildPlayers = findAllByGuildId(guildId);
+                    allPlayers.addAll(guildPlayers);
+                } finally {
+                    // Always clear context, even if exception occurs
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Retrieved all linked players using isolation-aware approach: {} total records", allPlayers.size());
         } catch (Exception e) {
-            logger.error("Error finding all linked players", e);
-            return new ArrayList<>();
+            logger.error("Error finding all linked players using isolation-aware approach", e);
         }
+        
+        return allPlayers;
+    }
+    
+    /**
+     * Get distinct guild IDs from the linked player collection
+     * Used for isolation-aware cross-guild operations
+     */
+    public List<Long> getDistinctGuildIds() {
+        List<Long> guildIds = new ArrayList<>();
+        
+        try {
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from linked players", e);
+        }
+        
+        return guildIds;
     }
     
     /**

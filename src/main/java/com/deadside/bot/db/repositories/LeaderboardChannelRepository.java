@@ -126,32 +126,53 @@ public class LeaderboardChannelRepository {
     }
     
     /**
-     * Get all leaderboard channel configurations
-     * WARNING: This method returns all records without isolation
-     * and should be used cautiously for administrative purposes only
+     * Get all leaderboard channel configurations using isolation-aware approach
+     * This method gets all records but logs a warning when called
      */
     public List<Map<String, Object>> getAllLeaderboardChannels() {
         List<Map<String, Object>> result = new ArrayList<>();
         
         try {
-            getCollection().find().forEach(doc -> {
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("guildId", doc.getLong("guildId"));
-                entry.put("channelId", doc.getLong("channelId"));
-                entry.put("lastUpdated", doc.getLong("lastUpdated"));
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild's leaderboard channels with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
                 
-                // Include serverId if it exists in the document
-                if (doc.containsKey("serverId")) {
-                    entry.put("serverId", doc.getString("serverId"));
+                // Set isolation context for this guild before accessing data
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all channels for this guild (isolation-aware)
+                    List<Map<String, Object>> guildChannels = getAllLeaderboardChannelsByGuildId(guildId);
+                    result.addAll(guildChannels);
+                } finally {
+                    // Always clear context, even if exception occurs
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
                 }
-                
-                result.add(entry);
-            });
+            }
         } catch (Exception e) {
-            logger.error("Error getting all leaderboard channels", e);
+            logger.error("Error getting all leaderboard channels using isolation-aware method", e);
         }
         
         return result;
+    }
+    
+    /**
+     * Get distinct guild IDs from the leaderboard channel collection
+     * Used for isolation-aware cross-guild operations
+     */
+    public List<Long> getDistinctGuildIds() {
+        List<Long> guildIds = new ArrayList<>();
+        
+        try {
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from leaderboard channels", e);
+        }
+        
+        return guildIds;
     }
     
     /**
