@@ -218,6 +218,21 @@ public class BountyRepository {
      * @param serverId The game server ID for isolation
      * @return List of bounties for the specified guild and server
      */
+    public List<Bounty> findAllByGuildId(Long guildId) {
+        try {
+            if (guildId == null || guildId <= 0) {
+                logger.warn("Attempted to find bounties with invalid guild ID: {}", guildId);
+                return new ArrayList<>();
+            }
+            
+            Bson filter = Filters.eq("guildId", guildId);
+            return getCollection().find(filter).into(new ArrayList<>());
+        } catch (Exception e) {
+            logger.error("Error finding bounties by guild ID: {}", guildId, e);
+            return new ArrayList<>();
+        }
+    }
+    
     public List<Bounty> findAllByGuildIdAndServerId(Long guildId, String serverId) {
         try {
             if (guildId == null || guildId <= 0) {

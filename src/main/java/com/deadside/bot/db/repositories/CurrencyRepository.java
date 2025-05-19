@@ -312,6 +312,26 @@ public class CurrencyRepository {
     }
     
     /**
+     * Find all currencies by guild ID (partial isolation)
+     * @param guildId The Discord guild ID for isolation
+     * @return List of currencies for the specified guild
+     */
+    public List<Currency> findAllByGuildId(Long guildId) {
+        try {
+            if (guildId == null || guildId <= 0) {
+                logger.warn("Attempted to find currencies with invalid guild ID: {}", guildId);
+                return new ArrayList<>();
+            }
+            
+            Bson filter = Filters.eq("guildId", guildId);
+            return getCollection().find(filter).into(new ArrayList<>());
+        } catch (Exception e) {
+            logger.error("Error finding currencies by guild ID: {}", guildId, e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Find all currencies by guild ID and server ID with proper isolation
      * @param guildId The Discord guild ID for isolation
      * @param serverId The game server ID for isolation  

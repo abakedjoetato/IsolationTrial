@@ -338,6 +338,22 @@ public class FactionRepository {
     }
     
     /**
+     * Get all distinct guild IDs that have factions
+     * This is used for proper isolation when processing across multiple guilds
+     * @return List of distinct guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error retrieving distinct guild IDs for factions", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Find all factions
      * WARNING: This method doesn't enforce guild or server isolation
      * and should only be used in contexts where isolation is already enforced

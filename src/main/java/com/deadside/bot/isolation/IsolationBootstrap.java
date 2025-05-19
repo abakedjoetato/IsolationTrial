@@ -269,16 +269,36 @@ public class IsolationBootstrap {
         int count = 0;
         
         try {
-            // Check all bounties for proper isolation fields
-            List<Bounty> allBounties = bountyRepository.getAllBounties();
-            for (Bounty bounty : allBounties) {
-                if (bounty.getGuildId() > 0 && bounty.getServerId() != null && !bounty.getServerId().isEmpty()) {
-                    count++;
+            // Get distinct guild IDs for proper isolation verification
+            List<Long> distinctGuildIds = bountyRepository.getDistinctGuildIds();
+            int totalBounties = 0;
+            
+            // Verify bounties per guild context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    try {
+                        // Get bounties for this guild with proper isolation boundary
+                        List<Bounty> guildBounties = bountyRepository.findAllByGuildId(guildId);
+                        totalBounties += guildBounties.size();
+                        
+                        // Count bounties with proper isolation fields
+                        for (Bounty bounty : guildBounties) {
+                            if (bounty.getGuildId() > 0 && bounty.getServerId() != null && !bounty.getServerId().isEmpty()) {
+                                count++;
+                            }
+                        }
+                    } finally {
+                        // Always clear context
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                    }
                 }
             }
             
             logger.info("Found {} bounty records with proper isolation, {} without proper isolation", 
-                count, allBounties.size() - count);
+                count, totalBounties - count);
                 
             return count;
         } catch (Exception e) {
@@ -295,16 +315,36 @@ public class IsolationBootstrap {
         int count = 0;
         
         try {
-            // Check all currencies for proper isolation fields
-            List<Currency> allCurrencies = currencyRepository.getAllCurrencies();
-            for (Currency currency : allCurrencies) {
-                if (currency.getGuildId() > 0 && currency.getServerId() != null && !currency.getServerId().isEmpty()) {
-                    count++;
+            // Get distinct guild IDs for proper isolation verification
+            List<Long> distinctGuildIds = currencyRepository.getDistinctGuildIds();
+            int totalCurrencies = 0;
+            
+            // Verify currencies per guild context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    try {
+                        // Get currencies for this guild with proper isolation boundary
+                        List<Currency> guildCurrencies = currencyRepository.findAllByGuildId(guildId);
+                        totalCurrencies += guildCurrencies.size();
+                        
+                        // Count currencies with proper isolation fields
+                        for (Currency currency : guildCurrencies) {
+                            if (currency.getGuildId() > 0 && currency.getServerId() != null && !currency.getServerId().isEmpty()) {
+                                count++;
+                            }
+                        }
+                    } finally {
+                        // Always clear context
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                    }
                 }
             }
             
             logger.info("Found {} currency records with proper isolation, {} without proper isolation", 
-                count, allCurrencies.size() - count);
+                count, totalCurrencies - count);
                 
             return count;
         } catch (Exception e) {
