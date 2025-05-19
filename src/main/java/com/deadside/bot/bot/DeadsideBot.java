@@ -20,6 +20,9 @@ import com.deadside.bot.db.repositories.GameServerRepository;
 import com.deadside.bot.db.repositories.PlayerRepository;
 import com.deadside.bot.sftp.SftpConnector;
 import com.deadside.bot.utils.GuildIsolationManager;
+import com.deadside.bot.utils.DataIsolationMigration;
+
+import java.util.ArrayList;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
@@ -234,9 +237,19 @@ public class DeadsideBot {
         scheduler.scheduleAtFixedRate(
                 () -> {
                     try {
-                        List<GameServer> servers = gameServerRepository.findAll();
-                        for (GameServer server : servers) {
-                            csvParser.processDeathLogs(server);
+                        // Process servers using isolation-aware method
+                        List<Long> guildIds = fetchAllGuildIds();
+                        for (Long guildId : guildIds) {
+                            if (guildId != null && guildId > 0) {
+                                List<GameServer> guildServers = gameServerRepository.findAllByGuildId(guildId);
+                                for (GameServer server : guildServers) {
+                                    // Set isolation context for the current server
+                                    GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                                    csvParser.processDeathLogs(server);
+                                    // Clear context after processing
+                                    GuildIsolationManager.getInstance().clearContext();
+                                }
+                            }
                         }
                     } catch (Exception e) {
                         logger.error("Error processing CSV death logs: {}", e.getMessage(), e);
@@ -294,6 +307,32 @@ public class DeadsideBot {
     
     public JDA getJda() {
         return jda;
+    }
+    
+    /**
+     * Helper method to fetch all guild IDs for isolation-aware operations
+     * @return List of all guild IDs in the system
+     */
+    private List<Long> fetchAllGuildIds() {
+        try {
+            // If connected to Discord, get guild IDs from JDA
+            if (jda != null) {
+                return jda.getGuilds().stream()
+                        .map(guild -> guild.getIdLong())
+                        .toList();
+            }
+            
+            // Fallback to database if JDA is not ready, using isolation-aware methods
+            GameServerRepository serverRepo = new GameServerRepository();
+            List<Long> distinctGuildIds = serverRepo.getDistinctGuildIds();
+            
+            return distinctGuildIds.stream()
+                    .filter(guildId -> guildId > 0) // Only include valid guild IDs
+                    .toList();
+        } catch (Exception e) {
+            logger.error("Error fetching guild IDs for isolation: {}", e.getMessage(), e);
+            return new ArrayList<>();
+        }
     }
     
     /**

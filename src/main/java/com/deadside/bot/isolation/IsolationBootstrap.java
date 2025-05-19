@@ -1,5 +1,8 @@
 package com.deadside.bot.isolation;
 
+import com.deadside.bot.db.models.Alert;
+import com.deadside.bot.db.models.Bounty;
+import com.deadside.bot.db.models.Currency;
 import com.deadside.bot.db.models.GameServer;
 import com.deadside.bot.db.models.Player;
 import com.deadside.bot.db.repositories.*;
@@ -157,16 +160,30 @@ public class IsolationBootstrap {
         int count = 0;
         
         try {
-            // Check all servers for proper guild IDs
-            List<GameServer> allServers = gameServerRepository.getAllServers();
-            for (GameServer server : allServers) {
-                if (server.getGuildId() > 0) {
-                    count++;
+            // Get distinct guild IDs to check servers using isolation-aware approach
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            int totalServers = 0;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId > 0) {
+                    // Set isolation context for this guild
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    try {
+                        // Get all servers for this guild with proper isolation
+                        List<GameServer> guildServers = gameServerRepository.findAllByGuildId(guildId);
+                        count += guildServers.size();
+                        totalServers += guildServers.size();
+                    } finally {
+                        // Always clear context
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                    }
                 }
             }
             
             logger.info("Found {} server records with proper isolation, {} without proper isolation", 
-                count, allServers.size() - count);
+                count, totalServers - count);
                 
             return count;
         } catch (Exception e) {
@@ -259,6 +276,12 @@ public class IsolationBootstrap {
         // Initialize isolation manager (nothing to do, it's a singleton)
         GuildIsolationManager.getInstance();
         
+        // Initialize default server if needed
+        DefaultServerInitializer.initializeDefaultServer();
+        
+        // Ensure all guilds have a default server - important for isolation
+        ensureAllGuildsHaveDefaultServer();
+        
         // Load cleanup settings
         DataCleanupTool.loadSettings();
         
@@ -268,7 +291,13 @@ public class IsolationBootstrap {
             runStartupCleanup();
         }
         
-        logger.info("Data isolation systems initialized successfully");
+        // Fix any isolation issues found during startup
+        fixIsolationIssues();
+        
+        // Verify isolation integrity across repositories
+        verifyIsolationIntegrity();
+        
+        logger.info("Data isolation systems initialized successfully with proper guild boundaries");
     }
     
     /**
@@ -367,5 +396,220 @@ public class IsolationBootstrap {
      */
     public BountyRepository getBountyRepository() {
         return bountyRepository;
+    }
+    
+    /**
+     * Ensure all guilds have default servers set up properly for data isolation
+     * This method is used during bootstrap to ensure proper isolation boundaries
+     */
+    private void ensureAllGuildsHaveDefaultServer() {
+        logger.info("Ensuring all guilds have default servers configured for proper isolation");
+        
+        try {
+            // Get all distinct guild IDs from the database
+            List<Long> allGuildIds = gameServerRepository.getDistinctGuildIds();
+            int initializedCount = 0;
+            
+            // Check each guild and ensure it has a default server
+            for (Long guildId : allGuildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    // Check if this guild already has a default server
+                    List<GameServer> guildServers = gameServerRepository.findAllByGuildId(guildId);
+                    boolean hasDefaultServer = false;
+                    
+                    for (GameServer server : guildServers) {
+                        if (DefaultServerInitializer.DEFAULT_SERVER_ID.equals(server.getServerId())) {
+                            hasDefaultServer = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasDefaultServer) {
+                        // Add default server for this guild
+                        DefaultServerInitializer.addDefaultServerToGuild(guildId);
+                        initializedCount++;
+                    }
+                    
+                    // Clear context after processing
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.info("Successfully initialized default servers for {} guilds", initializedCount);
+        } catch (Exception e) {
+            logger.error("Error ensuring all guilds have default servers", e);
+        } finally {
+            // Always clear context when done
+            GuildIsolationManager.getInstance().clearContext();
+        }
+    }
+    
+    /**
+     * Fix any isolation issues found in the database
+     * This ensures all records have proper guild and server boundaries
+     */
+    private void fixIsolationIssues() {
+        logger.info("Fixing data isolation issues in all repositories");
+        
+        try {
+            // Step 1: Fix player records without proper isolation
+            fixPlayerIsolationIssues();
+            
+            // Step 2: Fix currency records without proper isolation
+            fixCurrencyIsolationIssues();
+            
+            // Step 3: Fix alert records without proper isolation
+            fixAlertIsolationIssues();
+            
+            // Step 4: Fix bounty records without proper isolation
+            fixBountyIsolationIssues();
+            
+            logger.info("Completed fixing isolation issues across all repositories");
+        } catch (Exception e) {
+            logger.error("Error fixing isolation issues", e);
+        }
+    }
+    
+    /**
+     * Fix player isolation issues
+     */
+    private void fixPlayerIsolationIssues() {
+        try {
+            // Find players without proper guild and server IDs
+            List<Player> allPlayers = playerRepository.getAllPlayers();
+            int fixedCount = 0;
+            
+            for (Player player : allPlayers) {
+                if (player.getGuildId() <= 0 || player.getServerId() == null || player.getServerId().isEmpty()) {
+                    // This player needs to be fixed with proper isolation
+                    player.setGuildId(player.getGuildId() <= 0 ? DefaultServerInitializer.DEFAULT_GUILD_ID : player.getGuildId());
+                    player.setServerId(player.getServerId() == null || player.getServerId().isEmpty() ? 
+                        DefaultServerInitializer.DEFAULT_SERVER_ID : player.getServerId());
+                    
+                    // Set isolation context before saving
+                    GuildIsolationManager.getInstance().setContext(player.getGuildId(), player.getServerId());
+                    
+                    // Save with isolation context set
+                    playerRepository.save(player);
+                    
+                    // Clear context
+                    GuildIsolationManager.getInstance().clearContext();
+                    
+                    fixedCount++;
+                }
+            }
+            
+            logger.info("Fixed isolation for {} player records", fixedCount);
+        } catch (Exception e) {
+            logger.error("Error fixing player isolation issues", e);
+        }
+    }
+    
+    /**
+     * Fix currency isolation issues
+     */
+    private void fixCurrencyIsolationIssues() {
+        try {
+            // Find currency records without proper guild and server IDs
+            List<Currency> allCurrencies = currencyRepository.getAllCurrencies();
+            int fixedCount = 0;
+            
+            for (Currency currency : allCurrencies) {
+                if (currency.getGuildId() <= 0 || currency.getServerId() == null || currency.getServerId().isEmpty()) {
+                    // This currency record needs to be fixed with proper isolation
+                    currency.setGuildId(currency.getGuildId() <= 0 ? DefaultServerInitializer.DEFAULT_GUILD_ID : currency.getGuildId());
+                    currency.setServerId(currency.getServerId() == null || currency.getServerId().isEmpty() ? 
+                        DefaultServerInitializer.DEFAULT_SERVER_ID : currency.getServerId());
+                    
+                    // Set isolation context before saving
+                    GuildIsolationManager.getInstance().setContext(currency.getGuildId(), currency.getServerId());
+                    
+                    // Save with isolation context set
+                    currencyRepository.save(currency);
+                    
+                    // Clear context
+                    GuildIsolationManager.getInstance().clearContext();
+                    
+                    fixedCount++;
+                }
+            }
+            
+            logger.info("Fixed isolation for {} currency records", fixedCount);
+        } catch (Exception e) {
+            logger.error("Error fixing currency isolation issues", e);
+        }
+    }
+    
+    /**
+     * Fix alert isolation issues
+     */
+    private void fixAlertIsolationIssues() {
+        try {
+            // Find alert records without proper guild and server IDs
+            List<Alert> allAlerts = alertRepository.getAllAlerts();
+            int fixedCount = 0;
+            
+            for (Alert alert : allAlerts) {
+                if (alert.getGuildId() <= 0 || alert.getServerId() == null || alert.getServerId().isEmpty()) {
+                    // This alert record needs to be fixed with proper isolation
+                    alert.setGuildId(alert.getGuildId() <= 0 ? DefaultServerInitializer.DEFAULT_GUILD_ID : alert.getGuildId());
+                    alert.setServerId(alert.getServerId() == null || alert.getServerId().isEmpty() ? 
+                        DefaultServerInitializer.DEFAULT_SERVER_ID : alert.getServerId());
+                    
+                    // Set isolation context before saving
+                    GuildIsolationManager.getInstance().setContext(alert.getGuildId(), alert.getServerId());
+                    
+                    // Save with isolation context set
+                    alertRepository.save(alert);
+                    
+                    // Clear context
+                    GuildIsolationManager.getInstance().clearContext();
+                    
+                    fixedCount++;
+                }
+            }
+            
+            logger.info("Fixed isolation for {} alert records", fixedCount);
+        } catch (Exception e) {
+            logger.error("Error fixing alert isolation issues", e);
+        }
+    }
+    
+    /**
+     * Fix bounty isolation issues
+     */
+    private void fixBountyIsolationIssues() {
+        try {
+            // Find bounty records without proper guild and server IDs
+            List<Bounty> allBounties = bountyRepository.getAllBounties();
+            int fixedCount = 0;
+            
+            for (Bounty bounty : allBounties) {
+                if (bounty.getGuildId() <= 0 || bounty.getServerId() == null || bounty.getServerId().isEmpty()) {
+                    // This bounty record needs to be fixed with proper isolation
+                    bounty.setGuildId(bounty.getGuildId() <= 0 ? DefaultServerInitializer.DEFAULT_GUILD_ID : bounty.getGuildId());
+                    bounty.setServerId(bounty.getServerId() == null || bounty.getServerId().isEmpty() ? 
+                        DefaultServerInitializer.DEFAULT_SERVER_ID : bounty.getServerId());
+                    
+                    // Set isolation context before saving
+                    GuildIsolationManager.getInstance().setContext(bounty.getGuildId(), bounty.getServerId());
+                    
+                    // Save with isolation context set
+                    bountyRepository.save(bounty);
+                    
+                    // Clear context
+                    GuildIsolationManager.getInstance().clearContext();
+                    
+                    fixedCount++;
+                }
+            }
+            
+            logger.info("Fixed isolation for {} bounty records", fixedCount);
+        } catch (Exception e) {
+            logger.error("Error fixing bounty isolation issues", e);
+        }
     }
 }

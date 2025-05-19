@@ -9,6 +9,7 @@ import com.deadside.bot.db.repositories.GameServerRepository;
 import com.deadside.bot.sftp.SftpConnector;
 import com.deadside.bot.utils.EmbedUtils;
 import com.deadside.bot.utils.ParserStateManager;
+import com.deadside.bot.utils.GuildIsolationManager;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
@@ -400,24 +401,31 @@ public class DeadsideCsvParser {
      */
     public int syncPlayerStatistics() {
         try {
-            logger.info("Starting player statistics synchronization");
+            logger.info("Starting player statistics synchronization with proper isolation");
             int updatedCount = 0;
             
             // Get all players from the repository with proper isolation
             List<Player> allPlayers = new ArrayList<>();
             
-            // First get a list of all game servers to process players by server
-            List<GameServer> allServers = gameServerRepository.getAllServers();
-            logger.info("Found {} game servers to check for players", allServers.size());
+            // First get a list of all distinct guild IDs for proper isolation
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            logger.info("Found {} distinct guilds to check for players", distinctGuildIds.size());
             
-            // For each server, get the players with proper isolation
-            for (GameServer server : allServers) {
-                if (server.getGuildId() > 0 && server.getServerId() != null) {
-                    List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
-                        server.getGuildId(), server.getServerId());
-                    allPlayers.addAll(serverPlayers);
-                    logger.debug("Added {} players from guild {} server {}", 
-                        serverPlayers.size(), server.getGuildId(), server.getServerId());
+            // For each guild, get servers with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                // Get all servers for this guild with proper isolation
+                List<GameServer> guildServers = gameServerRepository.findAllByGuildId(guildId);
+                logger.info("Found {} game servers for guild {}", guildServers.size(), guildId);
+                
+                // For each server in this guild, process with proper isolation
+                for (GameServer server : guildServers) {
+                    if (server.getGuildId() > 0 && server.getServerId() != null) {
+                        List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
+                            server.getGuildId(), server.getServerId());
+                        allPlayers.addAll(serverPlayers);
+                        logger.debug("Added {} players from guild {} server {}", 
+                            serverPlayers.size(), server.getGuildId(), server.getServerId());
+                    }
                 }
             }
             logger.info("Found {} players to check for statistics synchronization", allPlayers.size());
@@ -739,18 +747,25 @@ public class DeadsideCsvParser {
             // Get all players from the repository with proper isolation
             List<Player> allPlayers = new ArrayList<>();
             
-            // First get a list of all game servers to process players by server
-            List<GameServer> allServers = gameServerRepository.getAllServers();
-            logger.info("Found {} game servers to check for players", allServers.size());
+            // First get a list of all distinct guild IDs for proper isolation
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            logger.info("Found {} distinct guilds to check for players", distinctGuildIds.size());
             
-            // For each server, get the players with proper isolation
-            for (GameServer server : allServers) {
-                if (server.getGuildId() > 0 && server.getServerId() != null) {
-                    List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
-                        server.getGuildId(), server.getServerId());
-                    allPlayers.addAll(serverPlayers);
-                    logger.debug("Added {} players from guild {} server {}", 
-                        serverPlayers.size(), server.getGuildId(), server.getServerId());
+            // For each guild, get servers with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                // Get all servers for this guild with proper isolation
+                List<GameServer> guildServers = gameServerRepository.findAllByGuildId(guildId);
+                logger.info("Found {} game servers for guild {}", guildServers.size(), guildId);
+                
+                // For each server in this guild, process with proper isolation
+                for (GameServer server : guildServers) {
+                    if (server.getGuildId() > 0 && server.getServerId() != null) {
+                        List<Player> serverPlayers = playerRepository.getAllPlayersWithIsolation(
+                            server.getGuildId(), server.getServerId());
+                        allPlayers.addAll(serverPlayers);
+                        logger.debug("Added {} players from guild {} server {}", 
+                            serverPlayers.size(), server.getGuildId(), server.getServerId());
+                    }
                 }
             }
             int updatedPlayers = 0;

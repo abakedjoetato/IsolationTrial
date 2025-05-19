@@ -57,4 +57,4 @@ fi
 # Run the bot with all dependencies
 echo -e "${GREEN}Starting the Deadside Discord Bot...${NC}"
 echo -e "${YELLOW}Using classpath with all libraries to ensure proper dependency resolution${NC}"
-java -cp ./target/classes:./lib/* com.deadside.bot.Main
+mvn exec:java -Dexec.mainClass="com.deadside.bot.Main"

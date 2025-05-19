@@ -6,6 +6,8 @@ import com.deadside.bot.db.repositories.PlayerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * Fixes and utilities for the CSV parser to ensure proper data handling
  * and isolation between different Discord servers
@@ -23,19 +25,77 @@ public class CsvParsingFix {
             logger.info("Starting player stats validation and sync");
             int correctionCount = 0;
             
-            // For now, just count total non-isolated records (proper implementation will be added later)
-            long totalPlayers = playerRepository.countAll();
+            // Get guild IDs from existing players for proper isolation
+            List<Long> guildIds = getDistinctGuildIds(playerRepository);
+            long totalPlayers = 0;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : guildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    try {
+                        // Use isolation-aware methods - get all servers for this guild
+                        com.deadside.bot.db.repositories.GameServerRepository serverRepo = new com.deadside.bot.db.repositories.GameServerRepository();
+                        List<com.deadside.bot.db.models.GameServer> guildServers = serverRepo.findAllByGuildId(guildId);
+                        
+                        // Process each server for this guild
+                        List<Player> guildPlayers = new java.util.ArrayList<>();
+                        for (com.deadside.bot.db.models.GameServer server : guildServers) {
+                            List<Player> serverPlayers = playerRepository.findByGuildIdAndServerId(guildId, server.getServerId());
+                            guildPlayers.addAll(serverPlayers);
+                        }
+                        
+                        totalPlayers += guildPlayers.size();
+                        
+                        // Process players for this guild with proper isolation
+                        for (Player player : guildPlayers) {
+                            if (validateAndFixPlayerStats(player, playerRepository)) {
+                                correctionCount++;
+                            }
+                        }
+                    } finally {
+                        // Always clear context
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                    }
+                }
+            }
+            
             logger.info("Found {} total player records to verify", totalPlayers);
-            
-            // In a full implementation, this would validate and correct player stats
-            // across all isolation boundaries
-            
             logger.info("Completed player stats validation and sync, corrected {} records", correctionCount);
             return correctionCount;
         } catch (Exception e) {
             logger.error("Error validating and syncing player stats: {}", e.getMessage(), e);
             return 0;
         }
+    }
+    
+    /**
+     * Get distinct guild IDs from all player records for isolation-aware processing
+     */
+    private static List<Long> getDistinctGuildIds(PlayerRepository playerRepository) {
+        try {
+            // Create a GameServerRepository to get guild IDs using isolation-aware methods
+            // This is better than using getAllPlayers() which doesn't respect isolation
+            com.deadside.bot.db.repositories.GameServerRepository serverRepo = 
+                new com.deadside.bot.db.repositories.GameServerRepository();
+            
+            // Get distinct guild IDs using the proper isolation-aware method
+            return serverRepo.getDistinctGuildIds();
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs using isolation-aware methods: {}", e.getMessage(), e);
+            return new java.util.ArrayList<>();
+        }
+    }
+    
+    /**
+     * Validate and fix player stats with proper isolation
+     */
+    private static boolean validateAndFixPlayerStats(Player player, PlayerRepository playerRepository) {
+        // Implement stat validation and correction logic here
+        // For now just return false as we're not making actual corrections yet
+        return false;
     }
     
     /**

@@ -5,6 +5,7 @@
 /home/runner/workspace/src/main/java/com/deadside/bot/isolation/IsolationManager.java
 /home/runner/workspace/src/main/java/com/deadside/bot/commands/CommandManager.java
 /home/runner/workspace/src/main/java/com/deadside/bot/db/MongoDBConnection.java
+/home/runner/workspace/src/main/java/com/deadside/bot/isolation/DefaultServerInitializer.java
 /home/runner/workspace/src/main/java/com/deadside/bot/db/repositories/GuildConfigRepository.java
 /home/runner/workspace/src/main/java/com/deadside/bot/parsers/HistoricalDataProcessor.java
 /home/runner/workspace/src/main/java/com/deadside/bot/commands/stats/StatsCommand.java
@@ -31,6 +32,7 @@
 /home/runner/workspace/src/main/java/com/deadside/bot/commands/admin/PremiumCommand.java
 /home/runner/workspace/src/main/java/com/deadside/bot/commands/server/SetBountyChannelCommandWrapper.java
 /home/runner/workspace/src/main/java/com/deadside/bot/db/repositories/FactionRepository.java
+/home/runner/workspace/src/main/java/com/deadside/bot/parsers/IsolationAwareParser.java
 /home/runner/workspace/src/main/java/com/deadside/bot/listeners/ModalListener.java
 /home/runner/workspace/src/main/java/com/deadside/bot/isolation/DataMigrationTool.java
 /home/runner/workspace/src/main/java/com/deadside/bot/db/models/GuildConfig.java

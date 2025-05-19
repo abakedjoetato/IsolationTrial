@@ -25,3 +25,7 @@ args = "bash run_full_bot.sh"
 
 [deployment]
 run = ["sh", "-c", "cd . && java -cp ./target/classes:./lib/* com.deadside.bot.Main"]
+
+[[ports]]
+localPort = 8080
+externalPort = 80

@@ -9,6 +9,7 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mongodb.client.DistinctIterable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,12 +113,24 @@ public class GuildConfigRepository {
     
     /**
      * Find all guild configurations
-     * 
+     * This method doesn't enforce isolation and should be used cautiously
      * @return List of all guild configurations
      */
     public List<GuildConfig> findAll() {
         List<GuildConfig> result = new ArrayList<>();
         collection.find().forEach(doc -> result.add(new GuildConfig(doc)));
         return result;
+    }
+    
+    /**
+     * Get all distinct guild IDs from guild configurations
+     * This is useful for isolation-aware operations
+     * @return List of all guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        List<Long> guildIds = new ArrayList<>();
+        DistinctIterable<Long> distinctIds = collection.distinct("guildId", Long.class);
+        distinctIds.into(guildIds);
+        return guildIds;
     }
 }

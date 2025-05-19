@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -63,8 +64,33 @@ public class PlayerCountVoiceChannelUpdater {
         try {
             logger.debug("Starting scheduled player count voice channel updates");
             
-            // Get all guild configurations
-            List<GuildConfig> configs = guildConfigRepository.findAll();
+            // Get all guild configurations using isolation-aware approach
+            List<GuildConfig> configs = new ArrayList<>();
+            
+            // Use JDA to get distinct guild IDs for proper isolation
+            List<Long> distinctGuildIds = jda.getGuilds().stream()
+                .map(guild -> guild.getIdLong())
+                .toList();
+            logger.debug("Found {} distinct guilds for voice channel updates", distinctGuildIds.size());
+            
+            // For each guild, get configs with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                if (guildId > 0) {
+                    // Set isolation context for this guild
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                    
+                    try {
+                        // Get config for this guild using isolation-aware method
+                        GuildConfig guildConfig = guildConfigRepository.findByGuildId(guildId);
+                        if (guildConfig != null) {
+                            configs.add(guildConfig);
+                        }
+                    } finally {
+                        // Always clear context
+                        com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                    }
+                }
+            }
             
             for (GuildConfig config : configs) {
                 // Only process guilds with a voice channel configured

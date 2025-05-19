@@ -123,18 +123,35 @@ public class GameServerRepository {
     
     /**
      * Get all game servers
-     * Warning: This method does not enforce isolation and should be used cautiously
-     * For isolation-aware code, use getServersByGuildId instead
+     * DEPRECATED: This method does not enforce isolation and should be replaced
+     * For isolation-aware code, use findAllByGuildId(guildId) or iterateAllGuilds() pattern instead
      * @return List of all game servers
      */
+    @Deprecated
     public List<GameServer> getAllServers() {
         try {
-            logger.warn("Non-isolated server lookup using getAllServers(). Consider using isolation-aware methods instead.");
+            logger.warn("Non-isolated server lookup using getAllServers(). Consider using findAllByGuildId() or iterateAllGuilds() pattern instead.");
             List<GameServer> allServers = new ArrayList<>();
             getCollection().find().into(allServers);
             return allServers;
         } catch (Exception e) {
             logger.error("Error getting all servers", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get all distinct guild IDs in the database
+     * This is useful for proper isolation patterns when you need to work with all guilds
+     * @return List of all guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs", e);
             return new ArrayList<>();
         }
     }
@@ -407,6 +424,27 @@ public class GameServerRepository {
         } catch (Exception e) {
             logger.error("Error checking if game server exists by ID: {} with guild isolation: {}", serverId, guildId, e);
             return false;
+        }
+    }
+    
+    /* 
+     * Note: getDistinctGuildIds() is already defined above. This duplicate definition has been removed.
+     */
+    
+    /**
+     * Find server by the serverId across all guilds
+     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * It should only be used for administrative purposes
+     * @param serverId The server ID to search for
+     * @return The first server found with the given ID
+     */
+    public GameServer findByServerId(String serverId) {
+        try {
+            logger.warn("Non-isolated server lookup by ID: {}. Consider using findByServerIdAndGuildId.", serverId);
+            return getCollection().find(Filters.eq("serverId", serverId)).first();
+        } catch (Exception e) {
+            logger.error("Error finding server by ID without isolation: {}", serverId, e);
+            return null;
         }
     }
 }
