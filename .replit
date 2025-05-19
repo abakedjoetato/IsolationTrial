@@ -1,0 +1,27 @@
+modules = ["java-17", "java-11"]
+[nix]
+channel = "stable-24_05"
+packages = ["unzip", "maven", "mongodb"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "CompileAndStartBot"
+
+[[workflows.workflow]]
+name = "CompileAndStartBot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash run_full_bot.sh"
+
+[deployment]
+run = ["sh", "-c", "cd . && java -cp ./target/classes:./lib/* com.deadside.bot.Main"]
