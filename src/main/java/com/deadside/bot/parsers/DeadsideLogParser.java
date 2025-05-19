@@ -79,9 +79,25 @@ public class DeadsideLogParser {
      */
     public void processAllServerLogs() {
         try {
-            List<GameServer> servers = serverRepository.findAll();
+            // Use isolation-aware approach to process servers per guild
+            List<Long> distinctGuildIds = serverRepository.getDistinctGuildIds();
+            List<GameServer> allServers = new ArrayList<>();
             
-            for (GameServer server : servers) {
+            // Process each guild with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                // Set isolation context
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    // Get servers with proper isolation boundary
+                    List<GameServer> guildServers = serverRepository.findAllByGuildId(guildId);
+                    allServers.addAll(guildServers);
+                } finally {
+                    // Always clear context
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            for (GameServer server : allServers) {
                 try {
                     // Skip servers without log channel configured
                     if (server.getLogChannelId() == 0) {

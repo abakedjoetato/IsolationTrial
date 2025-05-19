@@ -12,6 +12,7 @@ import com.deadside.bot.sftp.SftpConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -84,10 +85,21 @@ public class ParserSystemValidator {
             AtomicInteger linesProcessed = new AtomicInteger();
             AtomicInteger serverCount = new AtomicInteger();
             
-            // Get all servers
-            List<GameServer> servers = gameServerRepository.findAll();
+            // Get all servers using isolation-aware approach
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> servers = new ArrayList<>();
             
-            // Process each server
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Process each server with proper isolation boundaries
             for (GameServer server : servers) {
                 // Skip servers without a configured guild
                 if (server.getGuildId() == 0) {
@@ -136,8 +148,20 @@ public class ParserSystemValidator {
             int correctionsMade = CsvParsingFix.validateAndSyncStats(playerRepository);
             report.statCorrections = correctionsMade;
             
-            // Check results for all servers combined
-            List<GameServer> allServers = gameServerRepository.findAll();
+            // Check results for all servers combined using isolation-aware approach
+            List<Long> checkGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> allServers = new ArrayList<>();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : checkGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    allServers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
             for (GameServer server : allServers) {
                 if (server.getGuildId() == 0) {
                     continue;
@@ -189,10 +213,21 @@ public class ParserSystemValidator {
             AtomicInteger totalEventsDetected = new AtomicInteger();
             AtomicInteger totalRotationDetections = new AtomicInteger();
             
-            // Get all servers
-            List<GameServer> servers = gameServerRepository.findAll();
+            // Get all servers using isolation-aware approach
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> servers = new ArrayList<>();
             
-            // Process each server
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            // Process each server with proper isolation boundaries
             for (GameServer server : servers) {
                 // Skip servers without a log channel
                 if (server.getLogChannelId() == 0) {

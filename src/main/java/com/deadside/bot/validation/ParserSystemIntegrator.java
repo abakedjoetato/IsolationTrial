@@ -12,6 +12,7 @@ import com.deadside.bot.sftp.SftpConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -91,9 +92,23 @@ public class ParserSystemIntegrator {
         try {
             logger.info("Applying CSV parser fixes");
             
-            List<GameServer> servers = gameServerRepository.findAll();
+            // Get all servers using isolation-aware approach
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> servers = new ArrayList<>();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
             int totalProcessed = 0;
             
+            // Process each server with proper isolation boundaries
             for (GameServer server : servers) {
                 try {
                     // Skip servers without a configured guild
@@ -194,9 +209,23 @@ public class ParserSystemIntegrator {
         try {
             logger.info("Applying log parser fixes");
             
-            List<GameServer> servers = gameServerRepository.findAll();
+            // Get all servers using isolation-aware approach
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> servers = new ArrayList<>();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
             int totalProcessed = 0;
             
+            // Process each server with proper isolation boundaries
             for (GameServer server : servers) {
                 try {
                     // Skip servers without a log channel

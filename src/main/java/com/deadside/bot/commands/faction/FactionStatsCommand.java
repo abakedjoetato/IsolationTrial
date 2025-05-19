@@ -132,7 +132,15 @@ public class FactionStatsCommand implements Command {
         // First, let's make sure faction data is up-to-date
         factionStatsSync.updateAllFactions();
         
-        List<Faction> factions = factionRepository.findAll();
+        // Get factions using isolation-aware approach
+        long guildId = event.getGuild().getIdLong();
+        com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+        List<Faction> factions;
+        try {
+            factions = factionRepository.findAllByGuildId(guildId);
+        } finally {
+            com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+        }
         if (factions.isEmpty()) {
             event.reply("No factions found.").setEphemeral(true).queue();
             return;

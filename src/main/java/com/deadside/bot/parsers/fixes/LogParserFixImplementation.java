@@ -68,7 +68,19 @@ public class LogParserFixImplementation {
      */
     public void processAllServerLogs() {
         try {
-            List<GameServer> servers = gameServerRepository.findAll();
+            // Use isolation-aware approach to process servers across all guilds
+            List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+            List<GameServer> servers = new ArrayList<>();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
+            }
             
             for (GameServer server : servers) {
                 try {

@@ -296,6 +296,43 @@ public class CurrencyRepository {
     }
     
     /**
+     * Get all distinct guild IDs from currencies collection
+     * This is useful for isolation-aware operations across multiple guilds
+     * @return List of distinct guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from currencies collection", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Find all currencies by guild ID and server ID with proper isolation
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation  
+     * @return List of currencies for the specified guild and server
+     */
+    public List<Currency> findAllByGuildIdAndServerId(Long guildId, String serverId) {
+        try {
+            if (guildId == null || guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to find currencies without proper isolation parameters. Guild ID: {}, Server ID: {}", 
+                    guildId, serverId);
+                return new ArrayList<>();
+            }
+            
+            return getAllCurrenciesWithIsolation(guildId, serverId);
+        } catch (Exception e) {
+            logger.error("Error finding currencies by guild and server IDs", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Get all currencies for a specific guild and server with proper isolation
      * @param guildId The Discord guild ID for isolation
      * @param serverId The game server ID for isolation

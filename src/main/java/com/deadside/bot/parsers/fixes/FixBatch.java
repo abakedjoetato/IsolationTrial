@@ -89,7 +89,19 @@ public class FixBatch {
         AtomicInteger totalDeaths = new AtomicInteger();
         
         // Get all servers
-        List<GameServer> servers = gameServerRepository.findAll();
+        // Use isolation-aware approach to process servers across all guilds
+        List<Long> distinctGuildIds = gameServerRepository.getDistinctGuildIds();
+        List<GameServer> servers = new ArrayList<>();
+        
+        // Process each guild with proper isolation context
+        for (Long guildId : distinctGuildIds) {
+            com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+            try {
+                servers.addAll(gameServerRepository.findAllByGuildId(guildId));
+            } finally {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+            }
+        }
         report.append("Found ").append(servers.size()).append(" game servers\n");
         
         // Process each server

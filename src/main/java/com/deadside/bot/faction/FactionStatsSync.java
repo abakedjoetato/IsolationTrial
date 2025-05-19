@@ -47,19 +47,38 @@ public class FactionStatsSync {
         try {
             logger.info("Starting faction statistics update for all factions");
             
-            // Get all factions
-            List<Faction> factions = factionRepository.findAll();
-            if (factions.isEmpty()) {
-                logger.info("No factions found to update");
+            // Get all factions using isolation-aware approach
+            List<Long> distinctGuildIds = factionRepository.getDistinctGuildIds();
+            
+            if (distinctGuildIds.isEmpty()) {
+                logger.info("No guild IDs found to update factions for");
                 return;
             }
             
-            // Update each faction
-            for (Faction faction : factions) {
-                updateFaction(faction.getId());
+            int totalFactions = 0;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                com.deadside.bot.utils.GuildIsolationManager.getInstance().setContext(guildId, null);
+                try {
+                    List<Faction> guildFactions = factionRepository.findAllByGuildId(guildId);
+                    totalFactions += guildFactions.size();
+                    
+                    // Update each faction in this guild context
+                    for (Faction faction : guildFactions) {
+                        updateFaction(faction.getId());
+                    }
+                } finally {
+                    com.deadside.bot.utils.GuildIsolationManager.getInstance().clearContext();
+                }
             }
             
-            logger.info("Completed faction statistics update for {} factions", factions.size());
+            if (totalFactions == 0) {
+                logger.info("No factions found to update across all guilds");
+                return;
+            }
+            
+            logger.info("Completed faction statistics update for {} factions", totalFactions);
         } catch (Exception e) {
             logger.error("Error updating all faction statistics: {}", e.getMessage(), e);
         }

@@ -293,6 +293,56 @@ public class PlayerRepository {
     }
     
     /**
+     * Get all distinct guild IDs from players collection
+     * This is useful for isolation-aware operations across multiple guilds
+     * @return List of distinct guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from players collection", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Find all players by guild ID and server ID with proper isolation
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation  
+     * @return List of players for the specified guild and server
+     */
+    public List<Player> findAllByGuildIdAndServerId(Long guildId, String serverId) {
+        try {
+            if (guildId == null || guildId <= 0 || serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to find players without proper isolation parameters. Guild ID: {}, Server ID: {}", 
+                    guildId, serverId);
+                GuildIsolationManager.FilterContext defaultContext = getDefaultFilterContext();
+                if (defaultContext != null) {
+                    guildId = defaultContext.getGuildId();
+                    serverId = defaultContext.getServerId();
+                    logger.info("Using default filter context for player lookup: Guild={}, Server={}", guildId, serverId);
+                } else {
+                    return new ArrayList<>();
+                }
+            }
+            
+            List<Player> players = new ArrayList<>();
+            getCollection().find(Filters.and(
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            )).into(players);
+            
+            return players;
+        } catch (Exception e) {
+            logger.error("Error finding players by guild and server IDs", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Get all players for a specific guild and server with proper isolation
      * @param guildId The Discord guild ID for isolation
      * @param serverId The game server ID for isolation

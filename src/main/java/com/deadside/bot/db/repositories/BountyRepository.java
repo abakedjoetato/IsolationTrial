@@ -212,6 +212,51 @@ public class BountyRepository {
     }
     
     /**
+     * Find all bounties by guild ID and server ID with proper isolation
+     * This method supports the Long parameter type required by isolation framework
+     * @param guildId The Discord guild ID for isolation
+     * @param serverId The game server ID for isolation
+     * @return List of bounties for the specified guild and server
+     */
+    public List<Bounty> findAllByGuildIdAndServerId(Long guildId, String serverId) {
+        try {
+            if (guildId == null || guildId <= 0) {
+                logger.warn("Attempted to find bounties with invalid guild ID: {}", guildId);
+                return new ArrayList<>();
+            }
+            if (serverId == null || serverId.isEmpty()) {
+                logger.warn("Attempted to find bounties with invalid server ID: {}", serverId);
+                return new ArrayList<>();
+            }
+            
+            Bson filter = Filters.and(
+                Filters.eq("guildId", guildId),
+                Filters.eq("serverId", serverId)
+            );
+            return getCollection().find(filter).into(new ArrayList<>());
+        } catch (Exception e) {
+            logger.error("Error finding bounties by guild ID and server ID: {} / {}", guildId, serverId, e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get all distinct guild IDs from bounties collection
+     * This is useful for isolation-aware operations across multiple guilds
+     * @return List of distinct guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from bounties collection", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Delete all bounties by guild and server - used for data cleanup
      */
     public long deleteAllByGuildIdAndServerId(long guildId, String serverId) {

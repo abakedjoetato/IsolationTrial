@@ -150,6 +150,22 @@ public class AlertRepository {
     }
     
     /**
+     * Get all distinct guild IDs from alerts collection
+     * This is useful for isolation-aware operations across multiple guilds
+     * @return List of distinct guild IDs
+     */
+    public List<Long> getDistinctGuildIds() {
+        try {
+            List<Long> guildIds = new ArrayList<>();
+            getCollection().distinct("guildId", Long.class).into(guildIds);
+            return guildIds;
+        } catch (Exception e) {
+            logger.error("Error getting distinct guild IDs from alerts collection", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
      * Find all alerts for a guild and server
      */
     public List<Alert> findAllByGuildIdAndServerId(long guildId, String serverId) {

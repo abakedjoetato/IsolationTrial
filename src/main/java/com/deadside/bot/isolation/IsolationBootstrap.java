@@ -133,21 +133,42 @@ public class IsolationBootstrap {
         int count = 0;
         
         try {
-            // Find all players that might be missing proper isolation fields
-            for (Player player : playerRepository.getAllPlayers()) {
-                if (player.getGuildId() <= 0 || player.getServerId() == null || player.getServerId().isEmpty()) {
-                    playersWithoutGuild.add(player);
-                } else {
-                    count++;
+            // Get distinct guild IDs for proper isolation verification approach
+            List<Long> distinctGuildIds = playerRepository.getDistinctGuildIds();
+            
+            // Verify players per guild context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    GuildIsolationManager.getInstance().setContext(guildId, null);
+                    try {
+                        // Process each server under this guild
+                        List<GameServer> servers = gameServerRepository.findAllByGuildId(guildId);
+                        for (GameServer server : servers) {
+                            if (server != null && server.getServerId() != null) {
+                                // Set specific server context for detailed isolation
+                                GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                                try {
+                                    // Get players within this isolation boundary
+                                    List<Player> players = playerRepository.findAllByGuildIdAndServerId(guildId, server.getServerId());
+                                    count += players.size();
+                                } finally {
+                                    // Reset back to guild-level context
+                                    GuildIsolationManager.getInstance().setContext(guildId, null);
+                                }
+                            }
+                        }
+                    } finally {
+                        // Always clear context
+                        GuildIsolationManager.getInstance().clearContext();
+                    }
                 }
             }
             
-            logger.info("Found {} player records with proper isolation, {} without proper isolation", 
-                count, playersWithoutGuild.size());
-                
+            logger.info("Verified isolation for {} player records with proper isolation boundaries", count);
             return count;
         } catch (Exception e) {
-            logger.error("Error verifying player isolation", e);
+            logger.error("Error verifying player isolation using isolation-aware approach", e);
             return 0;
         }
     }
@@ -193,27 +214,49 @@ public class IsolationBootstrap {
     }
     
     /**
-     * Verify isolation for alert records
+     * Verify isolation for alert records using isolation-aware pattern
      * @return Number of records verified
      */
     private int verifyAlertsIsolation() {
         int count = 0;
         
         try {
-            // Check all alerts for proper isolation fields
-            List<Alert> allAlerts = alertRepository.getAllAlerts();
-            for (Alert alert : allAlerts) {
-                if (alert.getGuildId() > 0 && alert.getServerId() != null && !alert.getServerId().isEmpty()) {
-                    count++;
+            // Get distinct guild IDs for proper isolation verification
+            List<Long> distinctGuildIds = alertRepository.getDistinctGuildIds();
+            
+            // Verify alerts per guild context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId != null && guildId > 0) {
+                    // Set isolation context for this guild
+                    GuildIsolationManager.getInstance().setContext(guildId, null);
+                    try {
+                        // Process each server under this guild
+                        List<GameServer> servers = gameServerRepository.findAllByGuildId(guildId);
+                        for (GameServer server : servers) {
+                            if (server != null && server.getServerId() != null) {
+                                // Set specific server context for detailed isolation
+                                GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                                try {
+                                    // Get alerts within this isolation boundary
+                                    List<Alert> alerts = alertRepository.findAllByGuildIdAndServerId(guildId, server.getServerId());
+                                    count += alerts.size();
+                                } finally {
+                                    // Reset back to guild-level context
+                                    GuildIsolationManager.getInstance().setContext(guildId, null);
+                                }
+                            }
+                        }
+                    } finally {
+                        // Always clear context
+                        GuildIsolationManager.getInstance().clearContext();
+                    }
                 }
             }
             
-            logger.info("Found {} alert records with proper isolation, {} without proper isolation", 
-                count, allAlerts.size() - count);
-                
+            logger.info("Verified isolation for {} alert records with proper isolation boundaries", count);
             return count;
         } catch (Exception e) {
-            logger.error("Error verifying alert isolation", e);
+            logger.error("Error verifying alert isolation using isolation-aware approach", e);
             return 0;
         }
     }
