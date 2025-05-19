@@ -2,6 +2,7 @@ package com.deadside.bot.db.repositories;
 
 import com.deadside.bot.db.MongoDBConnection;
 import com.deadside.bot.db.models.LinkedPlayer;
+import com.deadside.bot.utils.GuildIsolationManager;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.result.DeleteResult;
@@ -50,19 +51,68 @@ public class LinkedPlayerRepository {
     }
     
     /**
-     * Find a linked player by Discord ID
-     * WARNING: This method doesn't enforce guild or server isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find a linked player by Discord ID using isolation-aware approach
+     * This method properly respects isolation boundaries when retrieving linked players
+     * @param discordId The Discord ID to find
+     * @return The first linked player found with proper isolation boundaries respected
      */
     public LinkedPlayer findByDiscordId(long discordId) {
+        if (discordId <= 0) {
+            logger.error("Cannot find linked player with invalid Discord ID: {}", discordId);
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated linked player lookup by Discord ID: {}. Consider using findByDiscordIdAndGuildIdAndServerId.", discordId);
-            return getCollection().find(Filters.eq("discordId", discordId)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the linked player with proper isolation
+                            LinkedPlayer player = findByDiscordIdAndGuildIdAndServerId(discordId, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found linked player with Discord ID {} in guild {} and server {} using isolation-aware approach", 
+                                    discordId, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No linked player found with Discord ID {} in any guild using isolation-aware approach", discordId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding linked player by Discord ID: {}", discordId, e);
+            logger.error("Error finding linked player by Discord ID: {} using isolation-aware approach", discordId, e);
             return null;
         }
     }
+    
+    // getDistinctGuildIds is already defined elsewhere in this class
     
     /**
      * Find a linked player by Discord ID with proper isolation
@@ -90,19 +140,57 @@ public class LinkedPlayerRepository {
      * and should only be used in contexts where isolation is already enforced
      */
     public LinkedPlayer findByPlayerId(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot find linked player with null or empty player ID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated linked player lookup by player ID: {}. Consider using findByPlayerIdAndGuildIdAndServerId.", playerId);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
             
-            // Check if it's a main player
-            LinkedPlayer mainLink = getCollection().find(Filters.eq("mainPlayerId", playerId)).first();
-            if (mainLink != null) {
-                return mainLink;
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the linked player with proper isolation
+                            LinkedPlayer player = findByPlayerIdAndGuildIdAndServerId(playerId, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found linked player with player ID {} in guild {} and server {} using isolation-aware approach", 
+                                    playerId, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
             }
             
-            // Check if it's an alt player
-            return getCollection().find(Filters.in("altPlayerIds", playerId)).first();
+            logger.debug("No linked player found with player ID {} in any guild using isolation-aware approach", playerId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding linked player by player ID: {}", playerId, e);
+            logger.error("Error finding linked player by player ID: {} using isolation-aware approach", playerId, e);
             return null;
         }
     }
@@ -211,21 +299,49 @@ public class LinkedPlayerRepository {
     }
     
     /**
-     * Delete a linked player (legacy method)
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Delete a linked player using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param linkedPlayer The linked player to delete
      */
     public void delete(LinkedPlayer linkedPlayer) {
+        if (linkedPlayer == null || linkedPlayer.getId() == null) {
+            logger.error("Cannot delete null linked player or player with null ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated linked player deletion for Discord ID: {}. Consider using deleteWithIsolation.", 
-                linkedPlayer.getDiscordId());
+            // Check if the linked player has guild information for proper isolation
+            if (linkedPlayer.getGuildId() <= 0) {
+                logger.error("Cannot delete linked player without proper guild ID: {}", linkedPlayer.getDiscordId());
+                return;
+            }
             
-            if (linkedPlayer.getId() != null) {
-                Bson filter = Filters.eq("_id", linkedPlayer.getId());
-                getCollection().deleteOne(filter);
-                logger.debug("Deleted linked player for Discord ID: {}", linkedPlayer.getDiscordId());
+            // Set isolation context for this guild and server
+            GuildIsolationManager.getInstance().setContext(linkedPlayer.getGuildId(), linkedPlayer.getServerId());
+            
+            try {
+                // Delete with proper isolation boundaries
+                Bson filter = Filters.and(
+                    Filters.eq("_id", linkedPlayer.getId()),
+                    Filters.eq("guildId", linkedPlayer.getGuildId()),
+                    Filters.eq("serverId", linkedPlayer.getServerId())
+                );
+                
+                DeleteResult result = getCollection().deleteOne(filter);
+                
+                if (result.getDeletedCount() > 0) {
+                    logger.debug("Deleted linked player for Discord ID {} in guild {} and server {} using isolation-aware approach", 
+                        linkedPlayer.getDiscordId(), linkedPlayer.getGuildId(), linkedPlayer.getServerId());
+                } else {
+                    logger.debug("No linked player found to delete for Discord ID {} in guild {} and server {} using isolation-aware approach", 
+                        linkedPlayer.getDiscordId(), linkedPlayer.getGuildId(), linkedPlayer.getServerId());
+                }
+            } finally {
+                // Always clear context when done
+                GuildIsolationManager.getInstance().clearContext();
             }
         } catch (Exception e) {
-            logger.error("Error deleting linked player: {}", linkedPlayer.getDiscordId(), e);
+            logger.error("Error deleting linked player: {} using isolation-aware approach", linkedPlayer.getDiscordId(), e);
         }
     }
     

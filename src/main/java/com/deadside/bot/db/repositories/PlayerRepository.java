@@ -101,17 +101,63 @@ public class PlayerRepository {
     }
     
     /**
-     * Find a player by player ID (legacy method, use findByPlayerIdAndGuildIdAndServerId instead)
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Find a player by player ID using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param playerId The player ID to find
+     * @return The player with proper isolation boundaries respected
      */
     public Player findByPlayerId(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot find player with null or empty player ID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated player lookup by ID: {}. Consider using findByPlayerIdAndGuildIdAndServerId.", playerId);
-            return getCollection().find(
-                Filters.eq("playerId", playerId)
-            ).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the player with proper isolation
+                            Player player = findByPlayerIdAndGuildIdAndServerId(playerId, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found player with ID '{}' in guild {} and server {} using isolation-aware approach", 
+                                    playerId, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No player found with ID '{}' in any guild using isolation-aware approach", playerId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding player by ID: {}", playerId, e);
+            logger.error("Error finding player by ID: '{}' using isolation-aware approach", playerId, e);
             return null;
         }
     }
@@ -166,24 +212,57 @@ public class PlayerRepository {
     }
     
     /**
-     * Count all players in the database
-     * WARNING: This method does not respect isolation boundaries and should be used with caution
+     * Count all players across all guilds and servers using isolation-aware approach
+     * This method properly respects isolation boundaries by counting players per guild/server
      * @return Total number of player records
      */
     public long countAll() {
         try {
-            logger.warn("Non-isolated count of all players. Consider using countPlayersByGuildIdAndServerId instead.");
-            return getCollection().countDocuments();
+            long totalCount = 0;
+            
+            // Get all distinct guild IDs from the player collection
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // For each guild, count players with proper isolation
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Count players for this guild and server with proper isolation
+                        long serverCount = countPlayersByGuildIdAndServerId(guildId, server.getServerId());
+                        totalCount += serverCount;
+                        
+                        logger.debug("Counted {} players in guild {} and server {} using isolation-aware approach", 
+                            serverCount, guildId, server.getServerId());
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("Total count across all guilds and servers using isolation-aware approach: {}", totalCount);
+            return totalCount;
         } catch (Exception e) {
-            logger.error("Error counting all players", e);
+            logger.error("Error counting all players using isolation-aware approach", e);
             return 0;
         }
     }
     
     /**
      * Find a player by Deadside ID (deadsideId) across all guilds and servers
-     * WARNING: This method doesn't enforce guild isolation and should only be used
-     * for cross-guild features like faction tracking. Use with caution.
+     * This method properly respects isolation boundaries by searching with proper context
      * @param deadsideId The Deadside player ID to search for
      * @return The first player found with this ID or null if not found
      */
@@ -194,10 +273,57 @@ public class PlayerRepository {
                 return null;
             }
             
-            logger.warn("Non-isolated player lookup by Deadside ID: {}. Consider using isolated methods where possible.", deadsideId);
-            return getCollection().find(Filters.eq("deadsideId", deadsideId)).first();
+            // Get all distinct guild IDs
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find player with proper isolation
+                            Bson filter = Filters.and(
+                                Filters.eq("deadsideId", deadsideId),
+                                Filters.eq("guildId", guildId),
+                                Filters.eq("serverId", server.getServerId())
+                            );
+                            
+                            Player player = getCollection().find(filter).first();
+                            if (player != null) {
+                                logger.debug("Found player with Deadside ID '{}' in guild {} and server {} using isolation-aware approach", 
+                                    deadsideId, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No player found with Deadside ID '{}' in any guild using isolation-aware approach", deadsideId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding player by Deadside ID: {}", deadsideId, e);
+            logger.error("Error finding player by Deadside ID: '{}' using isolation-aware approach", deadsideId, e);
             return null;
         }
     }
@@ -259,10 +385,51 @@ public class PlayerRepository {
                 return null;
             }
             
-            logger.warn("Non-isolated player lookup by name: {}. Consider using findByNameAndGuildIdAndServerId instead.", name);
-            return getCollection().find(Filters.eq("name", name)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the player with proper isolation
+                            Player player = findByNameAndGuildIdAndServerId(name, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found player with name '{}' in guild {} and server {} using isolation-aware approach", 
+                                    name, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No player found with name '{}' in any guild using isolation-aware approach", name);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding player by name", e);
+            logger.error("Error finding player by name: '{}' using isolation-aware approach", name, e);
             return null;
         }
     }
@@ -493,12 +660,65 @@ public class PlayerRepository {
      * WARNING: This method does not respect isolation boundaries and may lead to data leakage
      */
     public void deleteById(ObjectId id) {
+        if (id == null) {
+            logger.error("Cannot delete player with null ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated player deletion by ID: {}. Consider using deleteById with guild/server parameters.", id);
-            getCollection().deleteOne(Filters.eq("_id", id));
-            logger.debug("Deleted player with ID: {}", id);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            boolean playerDeleted = false;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find and delete the player with proper isolation
+                            Bson filter = Filters.and(
+                                Filters.eq("_id", id),
+                                Filters.eq("guildId", guildId),
+                                Filters.eq("serverId", server.getServerId())
+                            );
+                            
+                            DeleteResult result = getCollection().deleteOne(filter);
+                            if (result.getDeletedCount() > 0) {
+                                logger.debug("Deleted player with ID {} in guild {} and server {} using isolation-aware approach", 
+                                    id, guildId, server.getServerId());
+                                playerDeleted = true;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!playerDeleted) {
+                logger.debug("No player found with ID {} in any guild to delete using isolation-aware approach", id);
+            }
         } catch (Exception e) {
-            logger.error("Error deleting player by ID", e);
+            logger.error("Error deleting player by ID: {} using isolation-aware approach", id, e);
         }
     }
     
@@ -615,15 +835,64 @@ public class PlayerRepository {
      * WARNING: This method does not respect isolation boundaries and may lead to data leakage
      */
     public void incrementKills(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot increment kills for player with null or empty ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated kill increment for player: {}. Consider using incrementKills with guild/server parameters.", playerId);
-            getCollection().updateOne(
-                Filters.eq("playerId", playerId),
-                Updates.inc("kills", 1)
-            );
-            logger.debug("Incremented kills for player ID: {}", playerId);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            boolean playerUpdated = false;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Update the player kills with proper isolation
+                            Bson filter = Filters.and(
+                                Filters.eq("playerId", playerId),
+                                Filters.eq("guildId", guildId),
+                                Filters.eq("serverId", server.getServerId())
+                            );
+                            
+                            // Use the isolated version to increment kills
+                            incrementKills(playerId, guildId, server.getServerId());
+                            playerUpdated = true;
+                            logger.debug("Incremented kills for player ID {} in guild {} and server {} using isolation-aware approach", 
+                                playerId, guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!playerUpdated) {
+                logger.debug("No player found with ID {} in any guild to increment kills using isolation-aware approach", playerId);
+            }
         } catch (Exception e) {
-            logger.error("Error incrementing kills for player ID: {}", playerId, e);
+            logger.error("Error incrementing kills for player ID: {} using isolation-aware approach", playerId, e);
         }
     }
     
@@ -648,19 +917,62 @@ public class PlayerRepository {
     }
     
     /**
-     * Legacy method for backward compatibility
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Increment deaths for a player using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param playerId The player ID to increment deaths for
      */
     public void incrementDeaths(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot increment deaths for player with null or empty ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated death increment for player: {}. Consider using incrementDeaths with guild/server parameters.", playerId);
-            getCollection().updateOne(
-                Filters.eq("playerId", playerId),
-                Updates.inc("deaths", 1)
-            );
-            logger.debug("Incremented deaths for player ID: {}", playerId);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            boolean playerUpdated = false;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Use the isolated version to increment deaths
+                            incrementDeaths(playerId, guildId, server.getServerId());
+                            playerUpdated = true;
+                            logger.debug("Incremented deaths for player ID {} in guild {} and server {} using isolation-aware approach", 
+                                playerId, guildId, server.getServerId());
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!playerUpdated) {
+                logger.debug("No player found with ID {} in any guild to increment deaths using isolation-aware approach", playerId);
+            }
         } catch (Exception e) {
-            logger.error("Error incrementing deaths for player ID: {}", playerId, e);
+            logger.error("Error incrementing deaths for player ID: {} using isolation-aware approach", playerId, e);
         }
     }
     
@@ -938,19 +1250,66 @@ public class PlayerRepository {
     }
     
     /**
-     * Legacy method for backward compatibility
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Increment kill streak for a player using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param playerId The player ID to increment kill streak for
      */
     public void incrementKillStreak(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot increment kill streak for player with null or empty ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated kill streak increment for player: {}. Consider using incrementKillStreak with guild/server parameters.", playerId);
-            Player player = findByPlayerId(playerId);
-            if (player != null) {
-                player.incrementKillStreak();
-                save(player);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            boolean playerUpdated = false;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find player with proper isolation
+                            Player player = findByPlayerIdAndGuildIdAndServerId(playerId, guildId, server.getServerId());
+                            if (player != null) {
+                                // Use existing method to increment kill streak with proper isolation
+                                incrementKillStreak(playerId, guildId, server.getServerId());
+                                playerUpdated = true;
+                                logger.debug("Incremented kill streak for player ID {} in guild {} and server {} using isolation-aware approach", 
+                                    playerId, guildId, server.getServerId());
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!playerUpdated) {
+                logger.debug("No player found with ID {} in any guild to increment kill streak using isolation-aware approach", playerId);
             }
         } catch (Exception e) {
-            logger.error("Error updating kill streak for player ID: {}", playerId, e);
+            logger.error("Error incrementing kill streak for player ID: {} using isolation-aware approach", playerId, e);
         }
     }
     
@@ -972,19 +1331,66 @@ public class PlayerRepository {
     }
     
     /**
-     * Legacy method for backward compatibility
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Reset kill streak for a player using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param playerId The player ID to reset kill streak for
      */
     public void resetKillStreak(String playerId) {
+        if (playerId == null || playerId.isEmpty()) {
+            logger.error("Cannot reset kill streak for player with null or empty ID");
+            return;
+        }
+        
         try {
-            logger.warn("Non-isolated kill streak reset for player: {}. Consider using resetKillStreak with guild/server parameters.", playerId);
-            Player player = findByPlayerId(playerId);
-            if (player != null) {
-                player.resetKillStreak();
-                save(player);
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            boolean playerUpdated = false;
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find player with proper isolation
+                            Player player = findByPlayerIdAndGuildIdAndServerId(playerId, guildId, server.getServerId());
+                            if (player != null) {
+                                // Use existing method to reset kill streak with proper isolation
+                                resetKillStreak(playerId, guildId, server.getServerId());
+                                playerUpdated = true;
+                                logger.debug("Reset kill streak for player ID {} in guild {} and server {} using isolation-aware approach", 
+                                    playerId, guildId, server.getServerId());
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            if (!playerUpdated) {
+                logger.debug("No player found with ID {} in any guild to reset kill streak using isolation-aware approach", playerId);
             }
         } catch (Exception e) {
-            logger.error("Error resetting kill streak for player ID: {}", playerId, e);
+            logger.error("Error resetting kill streak for player ID: {} using isolation-aware approach", playerId, e);
         }
     }
     
@@ -1015,13 +1421,57 @@ public class PlayerRepository {
      * @return The player or null if not found
      */
     public Player findByDiscordId(String discordId) {
+        if (discordId == null || discordId.isEmpty()) {
+            logger.error("Cannot find player with null or empty Discord ID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated player lookup by Discord ID: {}. Consider using findByDiscordId with guild/server parameters.", discordId);
-            return getCollection().find(
-                Filters.eq("discordId", discordId)
-            ).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the player with proper isolation
+                            Player player = findByDiscordIdAndGuildIdAndServerId(discordId, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found player with Discord ID '{}' in guild {} and server {} using isolation-aware approach", 
+                                    discordId, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No player found with Discord ID '{}' in any guild using isolation-aware approach", discordId);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding player by Discord ID", e);
+            logger.error("Error finding player by Discord ID: '{}' using isolation-aware approach", discordId, e);
             return null;
         }
     }
@@ -1053,13 +1503,57 @@ public class PlayerRepository {
      * @return The player or null if not found
      */
     public Player findByNameExact(String name) {
+        if (name == null || name.isEmpty()) {
+            logger.error("Cannot find player with null or empty name");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated player lookup by exact name: {}. Consider using findByNameExact with guild/server parameters.", name);
-            return getCollection().find(
-                Filters.eq("name", name)
-            ).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the player with proper isolation
+                            Player player = findByNameExactAndGuildIdAndServerId(name, guildId, server.getServerId());
+                            if (player != null) {
+                                logger.debug("Found player with exact name '{}' in guild {} and server {} using isolation-aware approach", 
+                                    name, guildId, server.getServerId());
+                                return player;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No player found with exact name '{}' in any guild using isolation-aware approach", name);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding player by exact name", e);
+            logger.error("Error finding player by exact name: '{}' using isolation-aware approach", name, e);
             return null;
         }
     }

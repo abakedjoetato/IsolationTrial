@@ -73,15 +73,69 @@ public class FactionRepository {
     }
     
     /**
-     * Find a faction by ID (legacy method)
-     * WARNING: This method does not respect isolation boundaries and may lead to data leakage
+     * Find a faction by ID using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param id The ObjectId of the faction to find
+     * @return The faction with proper isolation boundaries respected
      */
     public Faction findById(ObjectId id) {
+        if (id == null) {
+            logger.error("Cannot find faction with null ObjectID");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated faction lookup by ID: {}. Consider using findByIdWithIsolation.", id);
-            return getCollection().find(Filters.eq("_id", id)).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the faction with proper isolation
+                            Bson filter = Filters.and(
+                                Filters.eq("_id", id),
+                                Filters.eq("guildId", guildId),
+                                Filters.eq("serverId", server.getServerId())
+                            );
+                            
+                            Faction faction = getCollection().find(filter).first();
+                            if (faction != null) {
+                                logger.debug("Found faction with ID {} in guild {} and server {} using isolation-aware approach", 
+                                    id, guildId, server.getServerId());
+                                return faction;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No faction found with ID {} in any guild using isolation-aware approach", id);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding faction by ID: {}", id, e);
+            logger.error("Error finding faction by ID: {} using isolation-aware approach", id, e);
             return null;
         }
     }
@@ -107,17 +161,63 @@ public class FactionRepository {
     }
     
     /**
-     * Find a faction by name (generic version, not guild-specific)
-     * WARNING: This method doesn't enforce guild or server isolation
-     * and should only be used in contexts where isolation is already enforced
+     * Find a faction by name using isolation-aware approach
+     * This method properly respects isolation boundaries
+     * @param name The name of the faction to find
+     * @return The faction with proper isolation boundaries respected
      */
     public Faction findByName(String name) {
+        if (name == null || name.isEmpty()) {
+            logger.error("Cannot find faction with null or empty name");
+            return null;
+        }
+        
         try {
-            logger.warn("Non-isolated faction lookup by name: {}. Consider using findByNameAndGuildIdAndServerId.", name);
-            Bson filter = Filters.regex("name", "^" + name + "$", "i");  // Case-insensitive exact match
-            return getCollection().find(filter).first();
+            // Get distinct guild IDs to maintain isolation boundaries
+            List<Long> distinctGuildIds = getDistinctGuildIds();
+            
+            // Process each guild with proper isolation context
+            for (Long guildId : distinctGuildIds) {
+                if (guildId == null || guildId <= 0) continue;
+                
+                // Set isolation context for this guild
+                GuildIsolationManager.getInstance().setContext(guildId, null);
+                
+                try {
+                    // Get all servers for this guild to maintain proper isolation
+                    GameServerRepository gameServerRepo = new GameServerRepository();
+                    List<com.deadside.bot.db.models.GameServer> servers = gameServerRepo.findAllByGuildId(guildId);
+                    
+                    // Process each server with proper isolation
+                    for (com.deadside.bot.db.models.GameServer server : servers) {
+                        if (server == null || server.getServerId() == null) continue;
+                        
+                        // Set server context for detailed isolation
+                        GuildIsolationManager.getInstance().setContext(guildId, server.getServerId());
+                        
+                        try {
+                            // Find the faction with proper isolation
+                            Faction faction = findByNameAndGuildIdAndServerId(name, guildId, server.getServerId());
+                            if (faction != null) {
+                                logger.debug("Found faction with name '{}' in guild {} and server {} using isolation-aware approach", 
+                                    name, guildId, server.getServerId());
+                                return faction;
+                            }
+                        } finally {
+                            // Reset to guild-level context
+                            GuildIsolationManager.getInstance().setContext(guildId, null);
+                        }
+                    }
+                } finally {
+                    // Always clear context when done
+                    GuildIsolationManager.getInstance().clearContext();
+                }
+            }
+            
+            logger.debug("No faction found with name '{}' in any guild using isolation-aware approach", name);
+            return null;
         } catch (Exception e) {
-            logger.error("Error finding faction by name: {}", name, e);
+            logger.error("Error finding faction by name: '{}' using isolation-aware approach", name, e);
             return null;
         }
     }
